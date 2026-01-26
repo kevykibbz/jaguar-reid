@@ -1,0 +1,142 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.log
+*.pot
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+venv/
+env/
+ENV/
+.venv
+
+# PyTorch model files (large files - download from source)
+*.pth
+*.pt
+*.onnx
+*.pkl
+
+# Node.js / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-store/
+dist/
+dist-ssr/
+*.local
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE / Editor
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+.history/
+*.swp
+*.swo
+*~
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test data
+test_images/
+temp/
+tmp/
+*.tmp
+
+# Azure
+.azure/
+
+# Jupyter Notebooks (if any)
+.ipynb_checkpoints/
+*.ipynb
+
+# Coverage reports
+coverage/
+.nyc_output/
+
+# Build artifacts
+*.tar.gz
+*.zip
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Cache
+.cache/
+.parcel-cache/
+.eslintcache
+
+# Misc
+.next/
+out/
+.nuxt
+.cache
+.vuepress/dist
+.serverless/
+.fusebox/
+.dynamodb/
+.tern-port
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*

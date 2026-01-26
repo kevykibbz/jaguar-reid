@@ -1,0 +1,82 @@
+# Production Docker Compose Configuration
+# This file shows how to deploy to production
+
+# Docker Compose file for production deployment
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile
+    container_name: jaguar-reid-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src/backend/models:/app/models
+      # Optional: mount data directory for persistence
+      # - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Production environment variables
+      - ENV=production
+      - LOG_LEVEL=info
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - jaguar-network
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+
+  frontend:
+    build:
+      context: ./src/frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=/api
+    container_name: jaguar-reid-frontend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: always
+    networks:
+      - jaguar-network
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+networks:
+  jaguar-network:
+    driver: bridge
+
+# Production deployment instructions:
+# 1. Set environment variables:
+#    export FRONTEND_PORT=80
+# 
+# 2. Build and start:
+#    docker compose -f docker-compose.production.yml up -d
+#
+# 3. View logs:
+#    docker compose -f docker-compose.production.yml logs -f
+#
+# 4. Stop services:
+#    docker compose -f docker-compose.production.yml down
+#
+# 5. For HTTPS, add a reverse proxy like Nginx or Traefik in front

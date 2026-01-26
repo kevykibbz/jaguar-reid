@@ -1,0 +1,83 @@
+name: Deploy to Azure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
+
+env:
+  AZURE_WEBAPP_BACKEND: jaguar-reid-backend-${{ github.event.inputs.environment }}
+  AZURE_WEBAPP_FRONTEND: jaguar-reid-frontend-${{ github.event.inputs.environment }}
+
+jobs:
+  deploy:
+    name: Deploy to Azure
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+      
+      - name: Build and push Backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./src/backend
+          push: true
+          tags: ${{ secrets.ACR_LOGIN_SERVER }}/jaguar-reid-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Build and push Frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./src/frontend
+          push: true
+          tags: ${{ secrets.ACR_LOGIN_SERVER }}/jaguar-reid-frontend:${{ github.sha }}
+          build-args: |
+            VITE_API_URL=/api
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Deploy Backend to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_BACKEND }}
+          images: ${{ secrets.ACR_LOGIN_SERVER }}/jaguar-reid-backend:${{ github.sha }}
+      
+      - name: Deploy Frontend to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_FRONTEND }}
+          images: ${{ secrets.ACR_LOGIN_SERVER }}/jaguar-reid-frontend:${{ github.sha }}
+      
+      - name: Deployment Summary
+        run: |
+          echo "## Deployment Complete! 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Environment: ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend**: https://${{ env.AZURE_WEBAPP_BACKEND }}.azurewebsites.net" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend**: https://${{ env.AZURE_WEBAPP_FRONTEND }}.azurewebsites.net" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
