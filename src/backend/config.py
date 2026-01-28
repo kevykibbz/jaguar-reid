@@ -47,4 +47,6 @@ CORS_ORIGINS = [
     "http://localhost:5174",
     "http://localhost:3000",
     "http://localhost",
+    "https://jaguar-reid-frontend.ashymeadow-ca757d9f.eastus.azurecontainerapps.io",
+    "*",  # Allow all origins for production
 ]

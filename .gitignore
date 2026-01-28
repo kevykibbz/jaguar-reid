@@ -60,6 +60,11 @@ dist-ssr/
 .env.test.local
 .env.production.local
 
+# Azure credentials (NEVER COMMIT!)
+.azure-credentials
+azure-credentials.txt
+*.credentials
+
 # IDE / Editor
 .vscode/*
 !.vscode/settings.json
@@ -140,3 +145,5 @@ out/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+DEPLOY-AZURE-NOW.md

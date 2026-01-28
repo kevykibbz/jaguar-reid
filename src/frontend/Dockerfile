@@ -15,6 +15,10 @@ RUN npm install
 # Copy source code
 COPY . .
 
+# Build argument for API URL
+ARG VITE_API_URL=https://jaguar-reid-backend.ashymeadow-ca757d9f.eastus.azurecontainerapps.io
+ENV VITE_API_URL=$VITE_API_URL
+
 # Build the application
 RUN npm run build
 
