@@ -35,20 +35,26 @@ AI Pipeline: YOLO → SAM → ConvNeXt → Similarity Score
 
 - Docker & Docker Compose
 - Git
+- Python 3.8+ (for downloading models)
 
-### Running with Docker (Recommended)
+### Setup Instructions
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/YOUR_USERNAME/patterns-ai-wildlife.git
 cd patterns-ai-wildlife
 
-# Start services (auto port detection)
+# 2. Download pre-trained models (~800MB)
+python download_models.py
+
+# 3. Start services (auto port detection)
 ./start.ps1 --build
 
 # Or using docker-compose directly
 docker compose up --build
 ```
+
+**⚠️ Important**: You must run `python download_models.py` before building Docker images. This downloads the required AI models from Azure Storage.
 
 The application will be available at:
 - **Frontend**: http://localhost:3000
