@@ -78,20 +78,15 @@ SQLite Database + Azure Blob Storage
 git clone https://github.com/YOUR_USERNAME/patterns-ai-wildlife.git
 cd patterns-ai-wildlife
 
-# 2. Download pre-trained models (~800MB)
-python download_models.py
-
-# 3. Start services (auto port detection)
+# 2. Start services (auto port detection)
 ./start.ps1 --build
 
 # Or using docker-compose directly
 docker compose up --build
 ```
 
-**⚠️ Important**: You must run `python download_models.py` before building Docker images. This downloads the required AI models from Azure Storage.
-
 The application will be available at:
-- **Frontend**: http://localhost:3000
+- **Frontend**: http://localhost:3000 (or next available port)
 - **Backend API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
 
@@ -102,8 +97,7 @@ The application will be available at:
 ```bash
 cd src/backend
 pip install -r requirements.txt
-python install_torch.py
-uvicorn main:app --reload
+python start_dev.py
 ```
 
 #### Frontend
@@ -124,22 +118,30 @@ patterns-ai-wildlife/
 │   │   ├── models.py            # AI model loading
 │   │   ├── preprocessing.py     # Image processing
 │   │   ├── config.py            # Configuration
+│   │   ├── animal_filter.py     # Stage 0 animal filter
+│   │   ├── species_classifier.py # Stage 2 species classifier
+│   │   ├── database/            # SQLite/PostgreSQL data access
+│   │   ├── services/            # Azure storage integration
 │   │   ├── requirements.txt     # Python dependencies
-│   │   ├── install_torch.py     # Auto CPU/GPU detection
+│   │   ├── _test/               # Organized backend tests
 │   │   └── Dockerfile
 │   └── frontend/
 │       ├── src/
 │       │   ├── components/      # React components
+│       │   ├── pages/           # Route-level UI pages
+│       │   ├── services/        # API service layer
 │       │   ├── lib/             # Utilities
 │       │   └── App.tsx
 │       ├── package.json
 │       ├── nginx.conf           # Reverse proxy config
+│       ├── nginx.conf.template  # Runtime BACKEND_URL injection
+│       ├── entrypoint.sh        # Nginx config substitution
 │       └── Dockerfile
 ├── docker-compose.yml           # Development setup
 ├── docker-compose.production.yml # Production setup
+├── deploy-to-azure.ps1          # Azure Container Apps deploy script
 ├── start.ps1                    # Auto port detection script
-├── DOCKER.md                    # Docker documentation
-├── PRODUCTION.md                # Production deployment guide
+├── AZURE_DEPLOYMENT.md          # Azure deployment notes
 └── README.md
 ```
 
@@ -171,131 +173,82 @@ patterns-ai-wildlife/
 
 ### Core Endpoints
 
-#### `POST /identify`
-Identify a jaguar from an image. Returns match if found in database, otherwise indicates new jaguar.
+#### `POST /classify`
+Classify image or video through the three-stage pipeline.
 
 **Request:**
 - `file`: Image file, OR
 - `image_url`: Image URL
 
-**Response (Match Found):**
+Also supports JSON body:
+
 ```json
-{
-  "match": true,
-  "jaguar_id": "JAG_0001",
-  "jaguar_name": "Luna",
-  "confidence": 0.89,
-  "similarity": 0.89,
-  "first_seen": "2024-01-15",
-  "times_seen": 12
-}
+{ "image_url": "https://..." }
 ```
 
-**Response (No Match):**
-```json
-{
-  "match": false,
-  "confidence": 0.0,
-  "similarity": 0.62,
-  "message": "No matching jaguar found in database"
-}
-```
-
-**Error (Not a Jaguar):**
-```json
-{
-  "detail": "This image does not appear to be a jaguar. Detected: dog (confidence: 0.95)"
-}
-```
-
-#### `POST /register`
-Register a new jaguar in the database with a name.
-
-**Request:**
-- `file`: Image file, OR
-- `image_url`: Image URL
-- `jaguar_name`: Name for the jaguar
-
-**Response:**
+**Response (Animal / BigCat / Species):**
 ```json
 {
   "success": true,
-  "jaguar_id": "JAG_0015",
-  "jaguar_name": "Shadow",
-  "message": "Jaguar registered successfully"
+  "input_type": "image",
+  "stage0": {
+    "is_animal": true,
+    "label": "jaguar",
+    "confidence": 0.97
+  },
+  "stage1": {
+    "is_bigcat": true,
+    "confidence": 0.95
+  },
+  "stage2": {
+    "species": "jaguar",
+    "confidence": 0.92
+  }
+}
+```
+
+**Response (Non-animal example):**
+```json
+{
+  "success": true,
+  "input_type": "image",
+  "stage0": {
+    "is_animal": false,
+    "label": "dining table, board",
+    "confidence": 0.58
+  },
+  "stage1": null,
+  "stage2": null,
+  "message": "Image detected as non-animal: dining table, board (confidence: 58.44%)"
 }
 ```
 
 #### `POST /predict`
-Compare two jaguar images and return similarity score.
+Compatibility endpoint (delegates to `/classify`).
 
 **Request:**
-- `files`: Two image files, OR
-- `url1` & `url2`: Image URLs
+- `files`: file list (first file is used), OR
+- `url1` / `url2` for URL-based compatibility usage
 
-**Response:**
-```json
-{
-  "similarity": 0.8298,
-  "same_jaguar": true,
-  "confidence": 0.32
-}
-```
+#### `POST /predict/url`
+Classify from JSON URL payload.
 
-#### `POST /analyze-species`
-Perform comprehensive species analysis including subspecies identification, physical characteristics, and conservation status.
+#### `POST /predict/binary`
+Return stage-1 big-cat binary result.
 
-**Request:**
-- `file`: Image file, OR
-- `image_url`: Image URL
-
-**Response:**
-```json
-{
-  "species": {
-    "scientific_name": "Panthera onca",
-    "common_name": "Jaguar",
-    "detection_confidence": 0.94
-  },
-  "subspecies_analysis": {
-    "most_likely": {
-      "name": "Panthera onca onca",
-      "common_name": "Amazon Jaguar",
-      "confidence": 0.75,
-      "region": "Amazon Basin"
-    }
-  },
-  "pattern_analysis": {
-    "rosette_density": "medium-high",
-    "distinctiveness": "high - suitable for individual ID"
-  },
-  "physical_characteristics": {
-    "body_build": "robust and muscular",
-    "estimated_weight_range": "56-96 kg"
-  },
-  "conservation_status": {
-    "iucn_status": "Near Threatened",
-    "population_trend": "Decreasing"
-  }
-}
-```
+#### `POST /predict/species`
+Return stage-2 species result.
 
 ### Database Endpoints
 
 #### `GET /jaguars`
 List all registered jaguars.
 
-#### `GET /jaguar/{jaguar_id}`
-Get detailed information about a specific jaguar including all images and sighting history.
-
 #### `GET /statistics`
 Get database statistics (total jaguars, images, sightings).
 
 #### `GET /recent-activity`
 Get recent activity feed (registrations and matches).
-
-#### `GET /gallery`
-Get recent images gallery across all jaguars.
 
 #### `GET /health`
 Health check endpoint.
@@ -315,6 +268,17 @@ FRONTEND_PORT=3000
 # Backend configuration
 BACKEND_PORT=8000
 PYTHONUNBUFFERED=1
+
+# Production DB mode
+DATABASE_TYPE=postgresql
+DATABASE_URL=postgresql://username:password@host/database?sslmode=require
+
+# Optional Azure image storage
+AZURE_STORAGE_CONNECTION_STRING=your_connection_string
+AZURE_STORAGE_CONTAINER=jaguar-images
+
+# Frontend proxy target (containers)
+BACKEND_URL=http://backend:8000
 ```
 
 ### CPU vs GPU
@@ -326,13 +290,11 @@ The system automatically detects CUDA availability:
 
 ## 📦 Model Files
 
-Required models (downloaded via `download_models.py`):
+Core pipeline models used by backend:
 
-1. **YOLO**: `yolov8n.pt` - Object detection (~6MB)
-2. **SAM**: `sam_vit_b_01ec64.pth` - Segmentation (~375MB)
-3. **ConvNeXt Re-ID**: `convnext_arcface_jaguar_final.pth` - Individual identification (~412MB)
-
-Total download size: ~800MB
+1. `stage1_bigcat_efficientnet_b2.pth` - big cat vs non-big-cat
+2. `stage2_species_efficientnet_b2.pth` - species classification (cheetah/jaguar/leopard/lion/tiger)
+3. `models/mappings/stage2_class_mapping.json` - label mapping
 
 ## 💾 Data Storage
 
@@ -344,7 +306,7 @@ Total download size: ~800MB
 - Configure in `.env`:
   ```bash
   AZURE_STORAGE_CONNECTION_STRING=your_connection_string
-  AZURE_STORAGE_CONTAINER_NAME=jaguar-images
+  AZURE_STORAGE_CONTAINER=jaguar-images
   ```
 - Automatically uploads images when configured
 - Falls back to local storage if unavailable
@@ -363,12 +325,19 @@ docker compose up
 docker compose -f docker-compose.production.yml up -d
 ```
 
-See [PRODUCTION.md](PRODUCTION.md) for complete deployment guide including:
-- HTTPS setup with Traefik
-- Resource limits
-- Scaling strategies
-- Monitoring and logs
-- Backup procedures
+### Azure Container Apps
+
+```bash
+./deploy-to-azure.ps1
+```
+
+Important Azure notes:
+- Frontend nginx proxy must use internal backend URL: `http://jaguar-reid-backend`
+- Backend requires `DATABASE_URL` when `DATABASE_TYPE=postgresql`
+- Deployment script now falls back to root `.env` for missing `DATABASE_URL` and `AZURE_STORAGE_CONNECTION_STRING`
+- Validate deployment with:
+  - `https://<frontend>/api/health`
+  - `https://<frontend>/api/statistics`
 
 ## 🧪 Testing
 
@@ -376,29 +345,20 @@ See [PRODUCTION.md](PRODUCTION.md) for complete deployment guide including:
 
 ```bash
 # Test with jaguar image (should succeed)
-curl -X POST "http://localhost:8000/identify" \
+curl -X POST "http://localhost:8000/classify" \
   -F "file=@path/to/jaguar.jpg"
 
 # Test with non-jaguar image (should reject)
-curl -X POST "http://localhost:8000/identify" \
+curl -X POST "http://localhost:8000/classify" \
   -F "file=@path/to/dog.jpg"
-# Expected: {"detail": "This image does not appear to be a jaguar..."}
-```
-
-### Test Registration
-
-```bash
-curl -X POST "http://localhost:8000/register" \
-  -F "file=@path/to/jaguar.jpg" \
-  -F "jaguar_name=Luna"
+# Expected: stage0/stage1 result showing non-animal or non-big-cat
 ```
 
 ### Test Image Comparison
 
 ```bash
 curl -X POST "http://localhost:8000/predict" \
-  -F "files=@image1.jpg" \
-  -F "files=@image2.jpg"
+  -F "files=@image1.jpg"
 ```
 
 ## 🤝 Contributing
@@ -428,8 +388,7 @@ For questions or support, please open an issue on GitHub.
 
 ## 🔗 Links
 
-- [Docker Documentation](DOCKER.md)
-- [Production Deployment Guide](PRODUCTION.md)
+- [Azure Deployment Notes](AZURE_DEPLOYMENT.md)
 - [API Documentation](http://localhost:8000/docs)
 
 ---
