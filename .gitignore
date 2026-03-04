@@ -84,6 +84,12 @@ Thumbs.db
 # Docker
 .docker/
 docker-compose.override.yml
+Dockerfile.local
+.dockerignore.local
+docker-build.log
+*.tar
+*.tar.gz
+node_modules/.bin/
 
 # Logs
 logs/
@@ -149,3 +155,8 @@ out/
 DEPLOY-AZURE-NOW.md
 
 *.ps1
+download_camera_trap_images.py
+AZURE_DEPLOYMENT.md
+PRODUCTION_CLEANUP.md
+src/backend/sync_image_urls.py
+src\backend\notebook

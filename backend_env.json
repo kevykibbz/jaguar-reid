@@ -1,0 +1,14 @@
+[
+  {
+    "name": "PYTHONUNBUFFERED",
+    "value": "1"
+  },
+  {
+    "name": "ENV",
+    "value": "production"
+  },
+  {
+    "name": "DATABASE_TYPE",
+    "value": "postgresql"
+  }
+]

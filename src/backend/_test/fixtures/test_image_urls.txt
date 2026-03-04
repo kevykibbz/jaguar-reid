@@ -1,0 +1,19 @@
+1. https://inaturalist-open-data.s3.amazonaws.com/photos/618315063/large.jpg ->jaguar
+
+2. https://media.istockphoto.com/id/1252455620/photo/golden-retriever-dog.jpg?s=612x612&w=0&k=20&c=3KhqrRiCyZo-RWUeWihuJ5n-qRH1MfvEboFpf5PvKFg= ->dog
+
+3. https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSmtyzDWvAFEDk5F0D91e-55u_oJU72RdO53A&s ->elephant
+
+4. https://www.shutterstock.com/image-photo/tiger-peacefully-reclined-on-mossy-260nw-2519850751.jpg ->tiger
+
+5. https://media.istockphoto.com/id/1796374503/photo/the-lion-king.jpg?s=612x612&w=0&k=20&c=wDcyZj9yM1-7cCahtCn1SWnu_DGJsOHzlqWt6SSllzU= ->lion
+
+6. https://media.istockphoto.com/id/465470420/photo/focused.jpg?s=612x612&w=0&k=20&c=xjhwOExrjp-u2TFQRh4V7oI5XUlDddm6YF35AR01IZs= ->leopard
+
+7. https://nationalzoo.si.edu/sites/default/files/animals/cheetah-002.jpg ->cheetah
+
+8. https://media.istockphoto.com/id/626205158/photo/portrait-of-young-man-with-shocked-facial-expression.jpg?s=612x612&w=0&k=20&c=0SDJDt1crElYppk8F8Qw-MNeBp3Sr8G7cCs4PAHfEH0= ->human
+
+9. https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTLuLvzmQTf7vu4bfUp250h-KRe6NlyIEbbOA&s ->table
+
+10. https://www.ikea.com/us/en/images/products/pinntorp-chair-light-brown-stained__1296225_pe935730_s5.jpg ->chair

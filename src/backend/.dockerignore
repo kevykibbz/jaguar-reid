@@ -1,4 +1,7 @@
+# Python caches and bytecode
 .venv
+venv
+env
 __pycache__
 *.pyc
 *.pyo
@@ -15,9 +18,70 @@ htmlcov
 .mypy_cache
 .dmypy.json
 dmypy.json
+
+# OS files
 .DS_Store
 *.swp
 *.swo
 *~
+Thumbs.db
+
+# IDE
 .vscode
 .idea
+.eclipse
+
+# Git
+.git
+.gitignore
+.github
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Test infrastructure (not needed in production)
+_test/
+test_*.py
+pytest_results.txt
+pytest.ini
+conftest.py
+
+# Documentation (not needed in production)
+*.md
+README.md
+PROGRESS_REPORT.md
+docs/
+
+# Notebooks (not needed in production)
+*.ipynb
+notebook/
+
+# Old implementations
+main_old.py
+*_old.py
+*_backup.py
+
+# Database artifacts
+database/images/
+database/*.json.backup
+jaguars.json.backup
+
+# Large video files (not needed in production)
+assets/videos/
+
+# Old/unused model files (keep only stage1 and stage2)
+models/convnext_arcface_jaguar_final.pth
+models/convnext_arcface_jaguar_final.pth.backup
+models/sam_vit_b_01ec64.pth
+models/species_classifier_best.pth
+models/species_classifier_efficientnet.pth
+models/yolov8n.pt
+
+# Backup files
+*.backup
+*.bak
+*.tmp
+
+# Keep everything else (requirements.txt, config.py, main.py, models/, etc.)

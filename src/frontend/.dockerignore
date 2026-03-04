@@ -2,8 +2,8 @@ node_modules
 .venv
 dist
 build
-.env
 .env.local
+.env.development
 .DS_Store
 *.log
 .vscode

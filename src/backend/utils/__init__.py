@@ -1,0 +1,4 @@
+"""Utilities module - Helper functions and metadata extraction."""
+from .image_metadata import extract_image_metadata
+
+__all__ = ['extract_image_metadata']
