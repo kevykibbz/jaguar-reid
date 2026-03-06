@@ -3,8 +3,9 @@ Three-Stage Image/Video Classification Pipeline
 
 Pipeline:
 0. Load and preprocess image/video
-   - Validate video length <= 30 seconds
+   - Validate video length (auto-trim to 30 seconds if longer)
    - Extract frames from video (every 15th frame)
+   - Batch process frames in parallel for faster inference
 1. Stage 0: Animal Filter (Vision Transformer)
    - If Not Animal: Reject 
    - If Animal: Continue to Stage 1
@@ -14,6 +15,9 @@ Pipeline:
 3. Stage 2: Species classifier
    - Classify species: Jaguar, Leopard, Tiger, Lion, or Cheetah
 4. Return classification results with confidence scores
+
+Optimization: Video frames are processed in batches (default: 16 frames) for parallel
+GPU/CPU execution, significantly improving inference speed.
 """
 import io
 import cv2
@@ -27,7 +31,8 @@ from config import (
     IMAGE_SIZE,
     STAGE1_CONFIDENCE_THRESHOLD,
     STAGE2_CONFIDENCE_THRESHOLD,
-    STAGE2_CLASSES
+    STAGE2_CLASSES,
+    VIDEO_BATCH_SIZE
 )
 
 # Image preprocessing transform
@@ -95,10 +100,10 @@ def validate_video_duration(file_path_or_bytes, max_duration=30):
         print(f"[VideoValidator] Duration: {duration:.1f}s, FPS: {fps:.1f}, Frames: {frame_count}")
         
         return {
-            'valid': is_valid,
-            'duration': duration,
-            'fps': fps,
-            'frame_count': frame_count,
+            'valid': bool(is_valid),
+            'duration': float(duration),
+            'fps': float(fps),
+            'frame_count': int(frame_count),
             'error': error_msg
         }
     
@@ -112,13 +117,14 @@ def validate_video_duration(file_path_or_bytes, max_duration=30):
         }
 
 
-def extract_video_frames(file_path_or_bytes, frame_interval=15):
+def extract_video_frames(file_path_or_bytes, frame_interval=15, max_duration=30):
     """
-    Extract frames from video file
+    Extract frames from video file (auto-trims to max_duration if longer)
     
     Args:
         file_path_or_bytes: Path to video or video bytes
         frame_interval: Extract every nth frame (15 = ~2fps at 30fps)
+        max_duration: Maximum duration in seconds (videos longer than this will be trimmed)
     
     Returns:
         list of PIL Image objects
@@ -139,10 +145,21 @@ def extract_video_frames(file_path_or_bytes, frame_interval=15):
         if not cap.isOpened():
             raise ValueError("Failed to open video file")
         
+        # Get video properties
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = total_frames / fps if fps > 0 else 0
+        
+        # Calculate max frames to process (trim to max_duration)
+        max_frames = int(fps * max_duration) if duration > max_duration else total_frames
+        
+        if duration > max_duration:
+            print(f"[VideoExtractor] Video duration {duration:.1f}s exceeds {max_duration}s, trimming to first {max_duration}s")
+        
         frame_count = 0
         extracted_count = 0
         
-        while True:
+        while frame_count < max_frames:
             ret, frame = cap.read()
             if not ret:
                 break
@@ -158,7 +175,8 @@ def extract_video_frames(file_path_or_bytes, frame_interval=15):
         
         cap.release()
         
-        print(f"[VideoExtractor] Extracted {extracted_count} frames from {frame_count} total frames")
+        actual_duration = min(duration, max_duration)
+        print(f"[VideoExtractor] Extracted {extracted_count} frames from {frame_count} frames ({actual_duration:.1f}s)")
         
         return frames
     
@@ -169,7 +187,7 @@ def extract_video_frames(file_path_or_bytes, frame_interval=15):
 
 def classify_video_frames(frames, animal_filter):
     """
-    Classify if video contains animals using sampled frames
+    Classify if video contains animals using sampled frames (with batch processing)
     Uses majority voting across frames
     
     Args:
@@ -182,33 +200,33 @@ def classify_video_frames(frames, animal_filter):
     if not frames:
         return {'is_animal': False, 'animal_frames': 0, 'total_frames': 0}
     
-    animal_count = 0
+    # Use batch processing for faster inference
+    results = animal_filter.classify_batch(frames, batch_size=VIDEO_BATCH_SIZE)
     
-    for i, frame in enumerate(frames):
-        result = animal_filter.classify(frame)
-        if result['is_animal']:
-            animal_count += 1
+    # Count animal frames
+    animal_count = sum(1 for r in results if r['is_animal'])
     
     is_animal = (animal_count / len(frames)) > 0.3  # 30% threshold
     
     print(f"[VideoAnimalClassifier] {animal_count}/{len(frames)} frames detected as animal ({(animal_count/len(frames))*100:.1f}%)")
     
     return {
-        'is_animal': is_animal,
-        'animal_frames': animal_count,
-        'total_frames': len(frames),
-        'animal_ratio': animal_count / len(frames)
+        'is_animal': bool(is_animal),
+        'animal_frames': int(animal_count),
+        'total_frames': int(len(frames)),
+        'animal_ratio': float(animal_count / len(frames))
     }
 
 
-def classify_video_bigcat(frames, stage1_model):
+def classify_video_bigcat(frames, stage1_model, batch_size=None):
     """
-    Classify if video contains BigCats using sampled frames
+    Classify if video contains BigCats using sampled frames (with batch processing)
     Uses aggregation across frames
     
     Args:
         frames: List of PIL Image objects
         stage1_model: Loaded Stage 1 model
+        batch_size: Number of frames to process in parallel (None = use config default)
     
     Returns:
         dict with aggregated results
@@ -216,45 +234,53 @@ def classify_video_bigcat(frames, stage1_model):
     if not frames:
         return {'is_bigcat': False, 'bigcat_frames': 0, 'total_frames': 0}
     
+    if batch_size is None:
+        batch_size = VIDEO_BATCH_SIZE
+    
     bigcat_count = 0
     confidences = []
     
-    for frame in frames:
-        # Preprocess frame
-        image_tensor = transform(frame).unsqueeze(0).to(DEVICE)
+    # Process frames in batches for faster inference
+    for i in range(0, len(frames), batch_size):
+        batch_frames = frames[i:i + batch_size]
+        
+        # Preprocess batch
+        batch_tensors = torch.stack([transform(frame) for frame in batch_frames]).to(DEVICE)
         
         with torch.no_grad():
-            output = stage1_model(image_tensor)
-            probs = F.softmax(output, dim=1)
+            outputs = stage1_model(batch_tensors)
+            probs = F.softmax(outputs, dim=1)
         
-        bigcat_conf = probs[0, 0].item()
-        confidences.append(bigcat_conf)
+        # Extract BigCat confidences (class 0)
+        batch_confidences = probs[:, 0].cpu().numpy()
+        confidences.extend(batch_confidences.tolist())  # Convert to Python list
         
-        if bigcat_conf >= STAGE1_CONFIDENCE_THRESHOLD:
-            bigcat_count += 1
+        # Count BigCat detections
+        bigcat_count += int((batch_confidences >= STAGE1_CONFIDENCE_THRESHOLD).sum())
     
     is_bigcat = (bigcat_count / len(frames)) > 0.3  # 30% threshold
-    avg_confidence = np.mean(confidences)
+    avg_confidence = float(np.mean(confidences))
     
     print(f"[VideoBigCatClassifier] {bigcat_count}/{len(frames)} frames detected BigCat ({(bigcat_count/len(frames))*100:.1f}%)")
     
     return {
-        'is_bigcat': is_bigcat,
-        'bigcat_frames': bigcat_count,
-        'total_frames': len(frames),
-        'bigcat_ratio': bigcat_count / len(frames),
-        'avg_confidence': avg_confidence
+        'is_bigcat': bool(is_bigcat),
+        'bigcat_frames': int(bigcat_count),
+        'total_frames': int(len(frames)),
+        'bigcat_ratio': float(bigcat_count / len(frames)),
+        'avg_confidence': float(avg_confidence)
     }
 
 
-def classify_video_species(frames, stage2_model):
+def classify_video_species(frames, stage2_model, batch_size=None):
     """
-    Classify species in video using sampled frames
+    Classify species in video using sampled frames (with batch processing)
     Uses majority voting
     
     Args:
         frames: List of PIL Image objects
         stage2_model: Loaded Stage 2 model
+        batch_size: Number of frames to process in parallel (None = use config default)
     
     Returns:
         dict with aggregated results
@@ -262,34 +288,42 @@ def classify_video_species(frames, stage2_model):
     if not frames:
         return {'species': 'unknown', 'confidence': 0.0, 'frame_votes': {}}
     
+    if batch_size is None:
+        batch_size = VIDEO_BATCH_SIZE
+    
     species_votes = {}
     confidences = []
     
-    for frame in frames:
-        # Preprocess frame
-        image_tensor = transform(frame).unsqueeze(0).to(DEVICE)
+    # Process frames in batches for faster inference
+    for i in range(0, len(frames), batch_size):
+        batch_frames = frames[i:i + batch_size]
+        
+        # Preprocess batch
+        batch_tensors = torch.stack([transform(frame) for frame in batch_frames]).to(DEVICE)
         
         with torch.no_grad():
-            output = stage2_model(image_tensor)
-            probs = F.softmax(output, dim=1)
+            outputs = stage2_model(batch_tensors)
+            probs = F.softmax(outputs, dim=1)
         
-        confidence, predicted_idx = probs.max(1)
-        species_idx = predicted_idx.item()
-        species_name = STAGE2_CLASSES.get(species_idx, "unknown")
+        # Get predictions for each frame in batch
+        batch_confidences, batch_predicted_idx = probs.max(1)
         
-        species_votes[species_name] = species_votes.get(species_name, 0) + 1
-        confidences.append(confidence.item())
+        # Process each prediction in the batch
+        for conf, pred_idx in zip(batch_confidences.cpu().numpy(), batch_predicted_idx.cpu().numpy()):
+            species_name = STAGE2_CLASSES.get(int(pred_idx), "unknown")
+            species_votes[species_name] = species_votes.get(species_name, 0) + 1
+            confidences.append(float(conf))
     
     # Majority vote
     final_species = max(species_votes, key=species_votes.get)
-    final_confidence = np.mean(confidences)
+    final_confidence = float(np.mean(confidences))
     
     print(f"[VideoSpeciesClassifier] Species votes: {species_votes}")
     
     return {
-        'species': final_species,
-        'confidence': final_confidence,
-        'frame_votes': species_votes
+        'species': str(final_species),
+        'confidence': float(final_confidence),
+        'frame_votes': {str(k): int(v) for k, v in species_votes.items()}
     }
 
 
@@ -353,8 +387,8 @@ def classify_bigcat(image_bytes, stage1_model):
     print(f"[Stage1] Result: {'BigCat' if is_bigcat else 'NotBigCat'} ({bigcat_confidence:.2%})")
     
     return {
-        'is_bigcat': is_bigcat,
-        'confidence': bigcat_confidence,
+        'is_bigcat': bool(is_bigcat),
+        'confidence': float(bigcat_confidence),
         'label': 'BigCat' if is_bigcat else 'NotBigCat'
     }
 
@@ -396,8 +430,8 @@ def classify_species(image_bytes, stage2_model):
     print(f"[Stage2] Result: {species_name.title()} ({confidence_score:.2%})")
     
     return {
-        'species': species_name,
-        'confidence': confidence_score,
+        'species': str(species_name),
+        'confidence': float(confidence_score),
         'all_scores': all_scores
     }
 
@@ -500,27 +534,20 @@ def classify_video(video_bytes, animal_filter, stage1_model, stage2_model, max_d
         tmp_path = tmp.name
     
     try:
-        # Validate video duration
+        # Get video info for logging
         validation = validate_video_duration(tmp_path, max_duration=max_duration)
-        
-        if not validation['valid']:
-            return {
-                'success': False,
-                'error': validation['error'],
-                'video_info': {
-                    'duration': validation['duration'],
-                    'fps': validation['fps'],
-                    'frame_count': validation['frame_count']
-                }
-            }
         
         print("\n" + "="*50)
         print("THREE-STAGE WILDLIFE CLASSIFICATION (VIDEO)")
         print("="*50)
-        print(f"Video Duration: {validation['duration']:.1f}s (max: {max_duration}s) ✓")
         
-        # Extract frames
-        frames = extract_video_frames(tmp_path, frame_interval=15)
+        if validation['duration'] > max_duration:
+            print(f"Video Duration: {validation['duration']:.1f}s (trimming to {max_duration}s) ⚠️")
+        else:
+            print(f"Video Duration: {validation['duration']:.1f}s (max: {max_duration}s) ✓")
+        
+        # Extract frames (auto-trims if video is longer than max_duration)
+        frames = extract_video_frames(tmp_path, frame_interval=15, max_duration=max_duration)
         
         if not frames:
             return {
@@ -539,10 +566,10 @@ def classify_video(video_bytes, animal_filter, stage1_model, stage2_model, max_d
                 'success': True,
                 'input_type': 'video',
                 'video_info': {
-                    'duration': validation['duration'],
-                    'fps': validation['fps'],
-                    'frame_count': validation['frame_count'],
-                    'extracted_frames': len(frames)
+                    'duration': float(validation['duration']),
+                    'fps': float(validation['fps']),
+                    'frame_count': int(validation['frame_count']),
+                    'extracted_frames': int(len(frames))
                 },
                 'stage0': stage0_result,
                 'stage1': None,
@@ -561,10 +588,10 @@ def classify_video(video_bytes, animal_filter, stage1_model, stage2_model, max_d
                 'success': True,
                 'input_type': 'video',
                 'video_info': {
-                    'duration': validation['duration'],
-                    'fps': validation['fps'],
-                    'frame_count': validation['frame_count'],
-                    'extracted_frames': len(frames)
+                    'duration': float(validation['duration']),
+                    'fps': float(validation['fps']),
+                    'frame_count': int(validation['frame_count']),
+                    'extracted_frames': int(len(frames))
                 },
                 'stage0': stage0_result,
                 'stage1': stage1_result,
@@ -585,10 +612,10 @@ def classify_video(video_bytes, animal_filter, stage1_model, stage2_model, max_d
             'success': True,
             'input_type': 'video',
             'video_info': {
-                'duration': validation['duration'],
-                'fps': validation['fps'],
-                'frame_count': validation['frame_count'],
-                'extracted_frames': len(frames)
+                'duration': float(validation['duration']),
+                'fps': float(validation['fps']),
+                'frame_count': int(validation['frame_count']),
+                'extracted_frames': int(len(frames))
             },
             'stage0': stage0_result,
             'stage1': stage1_result,

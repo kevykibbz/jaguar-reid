@@ -234,10 +234,10 @@ const JaguarReIdPage = () => {
               <Sparkles className="h-8 w-8 text-emerald-500" />
               <div>
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-500 to-blue-500 bg-clip-text text-transparent">
-                  Wildlife Classification
+                  Jaguar Identification
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Identify big cat species from images
+                  Upload images or videos to identify individual jaguars
                 </p>
               </div>
             </motion.div>
@@ -255,8 +255,8 @@ const JaguarReIdPage = () => {
             transition={{ duration: 0.6 }}
           >
             <p className="text-lg text-muted-foreground max-w-3xl">
-              Upload an image to classify big cat species using our three-stage AI pipeline. 
-              Supports jaguars, leopards, lions, tigers, and cheetahs.
+              Upload an image or video to identify if it matches any known individual jaguar in our database, 
+              or register it as a new jaguar. Supports JPG, PNG, MP4, AVI, MOV formats.
             </p>
           </motion.div>
         </section>
@@ -272,7 +272,7 @@ const JaguarReIdPage = () => {
               <div className="space-y-3">
                 <label className="text-sm font-medium flex items-center gap-2">
                   <Upload className="h-4 w-4" />
-                  Upload Wildlife Image
+                  Upload Jaguar Image or Video
                 </label>
                 <ImageUploader
                   onImageUpload={handleImageUpload}

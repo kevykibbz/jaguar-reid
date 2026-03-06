@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Upload, Sparkles, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Upload, Sparkles, AlertCircle, ChevronDown, ChevronUp, Play } from "lucide-react";
 import { analyzeSpecies, type SpeciesAnalysis } from "../services/api";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
@@ -11,15 +11,89 @@ export default function SpeciesAnalysisPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<SpeciesAnalysis | null>(null);
   const [error, setError] = useState<string>("");
+  const [isVideoFile, setIsVideoFile] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string>("");
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(["species", "subspecies", "physical"])
   );
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Helper function to extract a random frame from video
+  const extractVideoFrame = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+
+      video.onloadedmetadata = () => {
+        // Seek to a random time between 10% and 90% of video duration
+        const duration = video.duration;
+        const randomTime = duration * (0.1 + Math.random() * 0.8);
+        video.currentTime = randomTime;
+      };
+
+      video.onseeked = () => {
+        try {
+          // Set canvas dimensions to video dimensions
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+
+          // Draw the video frame to canvas
+          ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          // Convert canvas to data URL
+          const frameUrl = canvas.toDataURL('image/jpeg', 0.8);
+          
+          // Clean up
+          URL.revokeObjectURL(video.src);
+          resolve(frameUrl);
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      video.onerror = () => {
+        URL.revokeObjectURL(video.src);
+        reject(new Error('Failed to load video'));
+      };
+
+      // Load the video
+      video.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFile(file);
-      setImagePreview(URL.createObjectURL(file));
+      
+      // Check if file is a video
+      const isVideo = file.type.startsWith('video/');
+      setIsVideoFile(isVideo);
+      
+      if (isVideo) {
+        // Store the video URL for playback
+        const videoObjectUrl = URL.createObjectURL(file);
+        setVideoUrl(videoObjectUrl);
+        try {
+          // Extract a random frame from the video for thumbnail
+          const frameUrl = await extractVideoFrame(file);
+          setImagePreview(frameUrl);
+        } catch (error) {
+          console.error('Failed to extract video frame:', error);
+          // Fallback to showing the video file directly
+          setImagePreview(videoObjectUrl);
+        }
+      } else {
+        // For images, use the file directly
+        setImagePreview(URL.createObjectURL(file));
+        setVideoUrl("");
+      }
+      
       setAnalysis(null);
       setError("");
     }
@@ -74,7 +148,9 @@ export default function SpeciesAnalysisPage() {
             </h1>
           </div>
           <p className="text-gray-600 dark:text-gray-400">
-            Advanced AI-powered species identification, pattern analysis, and biological characteristics detection
+            Advanced AI-powered species identification and biological characteristics analysis. 
+            Upload images or videos (JPG, PNG, MP4, AVI, MOV) for detailed classification.
+            Videos longer than 30 seconds will be automatically trimmed.
           </p>
         </div>
 
@@ -82,32 +158,54 @@ export default function SpeciesAnalysisPage() {
           {/* Upload Section */}
           <Card>
             <CardHeader>
-              <CardTitle>Upload Image</CardTitle>
+              <CardTitle>Upload Image or Video</CardTitle>
               <CardDescription>
-                Upload a jaguar image for comprehensive species analysis
+                Upload a jaguar image or video for comprehensive species analysis
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-8 text-center hover:border-purple-400 transition-colors">
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*"
                   onChange={handleFileSelect}
                   className="hidden"
                   id="file-upload"
                 />
                 <label htmlFor="file-upload" className="cursor-pointer">
                   {imagePreview ? (
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="max-h-64 mx-auto rounded-lg mb-4"
-                    />
+                    <div className="relative mb-4">
+                      {isVideoFile && videoUrl ? (
+                        <div className="relative">
+                          <video
+                            src={videoUrl}
+                            controls
+                            className="max-h-64 mx-auto rounded-lg"
+                            onPlay={() => setIsVideoPlaying(true)}
+                            onPause={() => setIsVideoPlaying(false)}
+                            onEnded={() => setIsVideoPlaying(false)}
+                          />
+                          {!isVideoPlaying && (
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <div className="bg-black/60 rounded-full p-4">
+                                <Play className="h-12 w-12 text-white fill-white" />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <img
+                          src={imagePreview}
+                          alt="Preview"
+                          className="max-h-64 mx-auto rounded-lg"
+                        />
+                      )}
+                    </div>
                   ) : (
                     <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                   )}
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {imagePreview ? "Click to change image" : "Click to upload image"}
+                    {imagePreview ? "Click to change file" : "Click to upload image or video"}
                   </p>
                 </label>
               </div>

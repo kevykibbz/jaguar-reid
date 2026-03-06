@@ -96,31 +96,6 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Analysis</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <div className="px-3 py-2 text-sm">
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Model:</span>
-                  <span className="font-medium">ConvNeXT</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Threshold:</span>
-                  <span className="font-medium">0.75</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Status:</span>
-                  <div className="flex items-center gap-1">
-                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
-                    <span className="font-medium text-green-600">Online</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter className="border-t p-4">

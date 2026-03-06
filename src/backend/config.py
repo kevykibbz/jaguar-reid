@@ -71,6 +71,10 @@ IMAGE_SIZE = 224  # EfficientNet-B2 standard input size
 STAGE1_CONFIDENCE_THRESHOLD = 0.5   # Minimum confidence for "BigCat" classification
 STAGE2_CONFIDENCE_THRESHOLD = 0.5   # Minimum confidence for species classification
 
+# ==================== VIDEO PROCESSING ====================
+VIDEO_BATCH_SIZE = 16  # Number of frames to process in parallel (batch processing)
+# Increase for more GPU memory, decrease for lower memory systems
+
 # ==================== API SETTINGS ====================
 CORS_ORIGINS = [
     "http://localhost:5173",

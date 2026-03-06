@@ -178,7 +178,68 @@ class AnimalFilter:
         is_animal = self.is_animal_wordnet(label)
         
         return {
-            'is_animal': is_animal,
-            'label': label,
-            'confidence': confidence
+            'is_animal': bool(is_animal),
+            'label': str(label),
+            'confidence': float(confidence)
         }
+    
+    def classify_batch(self, images, batch_size=16):
+        """
+        Classify multiple images in batches for faster processing
+        
+        Args:
+            images: List of PIL Image objects or numpy arrays
+            batch_size: Number of images to process at once
+            
+        Returns:
+            List of dicts with keys: is_animal, label, confidence
+        """
+        if not self.initialized:
+            self.initialize()
+        
+        if not self.initialized or not images:
+            return [{'is_animal': False, 'label': 'unknown', 'confidence': 0.0} for _ in images]
+        
+        # Convert all images to PIL if needed
+        pil_images = []
+        for img in images:
+            if isinstance(img, np.ndarray):
+                pil_images.append(Image.fromarray(img).convert('RGB'))
+            elif isinstance(img, Image.Image):
+                pil_images.append(img)
+            else:
+                raise ValueError("Input must be PIL Image or numpy array")
+        
+        results = []
+        
+        try:
+            # Process in batches
+            for i in range(0, len(pil_images), batch_size):
+                batch = pil_images[i:i + batch_size]
+                
+                with torch.no_grad():
+                    inputs = self.processor(images=batch, return_tensors="pt")
+                    inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                    outputs = self.model(**inputs)
+                    
+                    probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
+                    pred_ids = torch.argmax(probs, dim=1)
+                    confidences = torch.gather(probs, 1, pred_ids.unsqueeze(1)).squeeze(1)
+                    
+                    # Process each prediction
+                    for pred_id, confidence in zip(pred_ids.cpu().numpy(), confidences.cpu().numpy()):
+                        label = self.model.config.id2label[int(pred_id)]
+                        is_animal = self.is_animal_wordnet(label)
+                        
+                        results.append({
+                            'is_animal': bool(is_animal),
+                            'label': str(label),
+                            'confidence': float(confidence)
+                        })
+            
+            return results
+            
+        except Exception as e:
+            print(f"[AnimalFilter] Batch classification error: {e}")
+            # Fallback to single image processing
+            return [self.classify(img) for img in pil_images]
