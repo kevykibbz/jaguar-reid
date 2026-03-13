@@ -222,8 +222,8 @@ export async function fetchJaguarDetail(
 export async function fetchStatistics(
   signal?: AbortSignal,
 ): Promise<Statistics> {
-  const response = await apiClient.get<Statistics>("/statistics", { signal });
-  return response.data;
+  const response = await apiClient.get<{ success: boolean; statistics: Statistics }>("/statistics", { signal });
+  return response.data.statistics;
 }
 
 /**
@@ -301,13 +301,13 @@ export async function identifyJaguar(
   
   // Transform classify response to match expected format
   return {
-    match: isBigCat && species === "jaguar",
+    match: data.stage3?.match || false,
     species: species,
     confidence: confidence,
-    similarity: confidence, // Use confidence as similarity for now
+    similarity: data.stage3?.similarity || confidence,
     all_scores: data.stage2?.all_scores,
-    jaguar_id: (isBigCat && species === "jaguar") ? species : undefined,
-    jaguar_name: (isBigCat && species === "jaguar") ? species.charAt(0).toUpperCase() + species.slice(1) : undefined,
+    jaguar_id: data.jaguar_id || data.stage3?.jaguar_id,
+    jaguar_name: data.jaguar_name || data.stage3?.jaguar_name,
   };
 }
 

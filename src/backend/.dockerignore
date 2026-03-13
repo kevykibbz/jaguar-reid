@@ -71,8 +71,8 @@ jaguars.json.backup
 # Large video files (not needed in production)
 assets/videos/
 
-# Old/unused model files (keep only stage1 and stage2)
-models/convnext_arcface_jaguar_final.pth
+# Old/unused model files (keep only stage1, stage2, and stage3)
+# Removed convnext_arcface_jaguar_final.pth - now needed for Stage 3 re-identification
 models/convnext_arcface_jaguar_final.pth.backup
 models/sam_vit_b_01ec64.pth
 models/species_classifier_best.pth

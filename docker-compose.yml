@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build:
@@ -10,15 +8,16 @@ services:
       - "8000:8000"
     volumes:
       - ./src/backend/models:/app/models
+      - ./src/backend/database:/app/database
     environment:
       - PYTHONUNBUFFERED=1
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
     networks:
       - jaguar-network
 

@@ -19,8 +19,8 @@ from typing import Optional
 import httpx
 from pathlib import Path
 
-from config import CORS_ORIGINS
-from models import load_stage1_model, load_stage2_model
+from config import CORS_ORIGINS, DEVICE
+from models import load_stage1_model, load_stage2_model, load_stage3_model
 from animal_filter import AnimalFilter
 from preprocessing import classify_image, classify_video
 from database.database_manager import get_database
@@ -46,29 +46,61 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load models on startup
+# Initialize models as None (lazy loading)
 print("\n" + "="*70)
-print("INITIALIZING THREE-STAGE WILDLIFE CLASSIFICATION SYSTEM")
+print("JAGUAR RE-ID SYSTEM - SERVER STARTING")
 print("="*70)
-
-animal_filter = AnimalFilter(device='cpu')
-stage1_model = load_stage1_model()
-stage2_model = load_stage2_model()
-
-# Initialize database
-try:
-    db = get_database()
-    print("✓ Database initialized")
-except Exception as e:
-    print(f"⚠️  Database initialization failed: {e}")
-    db = None
-
-print("\n" + "="*70)
-print("🚀 SYSTEM READY!")
-print("="*70)
-print(f"📡 Backend running on: http://localhost:8000")
-print(f"📚 API docs at: http://localhost:8000/docs")
+print("Models will be loaded on first request to reduce startup time")
 print("="*70 + "\n")
+
+animal_filter = None
+stage1_model = None
+stage2_model = None
+stage3_model = None
+db = None
+models_loaded = False
+
+def ensure_models_loaded():
+    """Lazy load models on first request"""
+    global animal_filter, stage1_model, stage2_model, stage3_model, db, models_loaded
+    
+    if models_loaded:
+        return
+    
+    print("\n" + "="*70)
+    print("LOADING MODELS (First Request - This may take a few minutes on CPU)")
+    print("="*70)
+    
+    # Initialize Stage 0 (Animal Filter)
+    print("Loading Stage 0 (Animal vs Non-Animal Filter)...")
+    animal_filter = AnimalFilter(device='cpu')
+    animal_filter.initialize()
+    print("[OK] Stage 0 model loaded on cpu")
+    
+    print("Loading Stage 1 (BigCat Filter)...")
+    stage1_model = load_stage1_model()
+    print("[OK] Stage 1 model loaded")
+    
+    print("Loading Stage 2 (Species Classifier)...")
+    stage2_model = load_stage2_model()
+    print("[OK] Stage 2 model loaded")
+    
+    print("Loading Stage 3 (Jaguar Re-ID)...")
+    stage3_model = load_stage3_model()
+    print("[OK] Stage 3 model loaded")
+    
+    # Initialize database
+    try:
+        db = get_database()
+        print("[OK] Database initialized")
+    except Exception as e:
+        print(f"[WARNING] Database initialization failed: {e}")
+        db = None
+    
+    models_loaded = True
+    print("\n" + "="*70)
+    print("ALL MODELS LOADED - SYSTEM READY!")
+    print("="*70 + "\n")
 
 
 @app.get("/")
@@ -86,19 +118,21 @@ def read_root():
 def health_check():
     """Health check endpoint"""
     return {
-        "status": "healthy",
+        "status": "healthy" if models_loaded else "starting",
         "models": {
-            "stage0": "loaded",
-            "stage1": "loaded",
-            "stage2": "loaded"
+            "stage0": "loaded" if animal_filter else "not_loaded",
+            "stage1": "loaded" if stage1_model else "not_loaded",
+            "stage2": "loaded" if stage2_model else "not_loaded",
+            "stage3": "loaded" if stage3_model else "not_loaded"
         },
-        "system": "Three-Stage Wildlife Classification"
+        "system": "Three-Stage Wildlife Classification + Jaguar Re-ID"
     }
 
 
 @app.get("/jaguars")
 def get_jaguars():
     """Get all jaguars from database"""
+    ensure_models_loaded()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
     
@@ -116,6 +150,7 @@ def get_jaguars():
 @app.get("/recent-activity")
 def get_recent_activity(limit: int = 20):
     """Get recent activity feed (registrations and sightings)"""
+    ensure_models_loaded()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
     
@@ -133,6 +168,7 @@ def get_recent_activity(limit: int = 20):
 @app.get("/statistics")
 def get_statistics():
     """Get database statistics"""
+    ensure_models_loaded()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
     
@@ -174,6 +210,9 @@ async def classify(
     Returns:
         JSON with classification results from all stages
     """
+    # Lazy load models on first request
+    ensure_models_loaded()
+    
     import io
     
     file_bytes = None
@@ -251,10 +290,10 @@ async def classify(
         # Run appropriate classification
         if is_video:
             print("[Detector] Input type: VIDEO (max 30 seconds)")
-            result = classify_video(file_bytes, animal_filter, stage1_model, stage2_model, max_duration=30)
+            result = classify_video(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model, db, max_duration=30)
         else:
             print("[Detector] Input type: IMAGE")
-            result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model)
+            result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model, db)
         
         if not result.get('success'):
             raise HTTPException(
@@ -317,7 +356,7 @@ async def predict_from_url(request: Request):
             file_bytes = response.content
         
         # Classify
-        result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model)
+        result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model, db)
         
         if not result.get('success'):
             raise HTTPException(status_code=400, detail=result.get('error', 'Classification failed'))
@@ -358,7 +397,7 @@ async def predict_binary(request: Request):
             file_bytes = response.content
         
         # Classify - full pipeline but we'll return only stage1
-        result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model)
+        result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model, db)
         
         if not result.get('success'):
             raise HTTPException(status_code=400, detail=result.get('error', 'Classification failed'))
@@ -404,7 +443,7 @@ async def predict_species(request: Request):
             file_bytes = response.content
         
         # Classify - full pipeline but we'll return only stage2
-        result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model)
+        result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model, db)
         
         if not result.get('success'):
             raise HTTPException(status_code=400, detail=result.get('error', 'Classification failed'))
@@ -420,6 +459,257 @@ async def predict_species(request: Request):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@app.post("/suggest-names")
+async def suggest_jaguar_names(
+    file: Optional[UploadFile] = File(None),
+    image_url: Optional[str] = Form(None)
+):
+    """
+    Generate AI-powered name suggestions for a jaguar.
+    
+    Returns creative name suggestions based on spotted patterns, 
+    geographical regions, and cultural significance.
+    """
+    import random
+    from datetime import datetime
+    
+    # Base name categories with suggestions
+    nature_names = [
+        ("Luna", "Moon", "Named after the moon, symbolizing nocturnal hunting"),
+        ("Sol", "Sun", "Representing the golden spotted coat"),
+        ("Rio", "River", "For jaguars found near waterways"),
+        ("Sierra", "Mountain", "From mountain ranges"),
+        ("Storm", "Weather", "For powerful and fierce jaguars"),
+        ("Shadow", "Nature", "Symbolizing stealth and camouflage"),
+        ("Blaze", "Fire", "For jaguars with distinctive bright patterns"),
+        ("Thunder", "Weather", "Representing power and strength"),
+    ]
+    
+    indigenous_names = [
+        ("Itzamná", "Mayan", "Ancient Mayan deity associated with jaguars"),
+        ("Balam", "Mayan", "Means 'jaguar' in Mayan"),
+        ("Ix Chel", "Mayan", "Goddess associated with jaguars"),
+        ("Tepeyollotl", "Aztec", "Earth deity symbolized by jaguar"),
+        ("Yaguareté", "Guaraní", "Traditional indigenous name for jaguar"),
+        ("Kukulkan", "Mayan", "Feathered serpent deity"),
+    ]
+    
+    personality_names = [
+        ("Phoenix", "Rebirth", "For resilient jaguars"),
+        ("Ranger", "Explorer", "For jaguars with large territories"),
+        ("Sage", "Wisdom", "For older, experienced jaguars"),
+        ("Mystique", "Mystery", "For elusive individuals"),
+        ("Valor", "Courage", "For bold jaguars"),
+        ("Onyx", "Gemstone", "For dark-spotted jaguars"),
+        ("Amber", "Gemstone", "For golden-coated jaguars"),
+    ]
+    
+    # Combine and randomly select
+    all_names = nature_names + indigenous_names + personality_names
+    random.shuffle(all_names)
+    
+    # Select 6 diverse suggestions
+    suggestions = []
+    used_categories = set()
+    
+    for name, category, description in all_names:
+        if len(suggestions) < 6:
+            # Try to diversify categories
+            if category not in used_categories or len(suggestions) >= 3:
+                suggestions.append({
+                    "name": name,
+                    "category": category,
+                    "description": description
+                })
+                used_categories.add(category)
+    
+    # If we have file/image, extract metadata
+    image_metadata = {}
+    if file:
+        try:
+            from PIL import Image
+            import io
+            file_bytes = await file.read()
+            image = Image.open(io.BytesIO(file_bytes))
+            image_metadata = {
+                "width": image.width,
+                "height": image.height,
+                "format": image.format
+            }
+        except:
+            pass
+    
+    return {
+        "suggestions": suggestions,
+        "image_metadata": image_metadata
+    }
+
+
+@app.post("/register")
+async def register_jaguar(
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    image_url: Optional[str] = Form(None),
+    jaguar_name: Optional[str] = Form(None)
+):
+    """
+    Register a new jaguar in the database.
+    
+    Validates that the image contains a jaguar, extracts facial embedding,
+    and stores in database with the provided name.
+    
+    Args:
+        file: Image file upload (optional if image_url provided)
+        image_url: URL to image (optional if file provided)
+        jaguar_name: Name for the jaguar (required)
+    
+    Returns:
+        JSON with success status, message, and jaguar_id
+    """
+    # Lazy load models on first request
+    ensure_models_loaded()
+    
+    if not db:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    if not jaguar_name or not jaguar_name.strip():
+        raise HTTPException(status_code=400, detail="jaguar_name is required")
+    
+    jaguar_name = jaguar_name.strip()
+    
+    # Get file from upload or URL
+    file_bytes = None
+    
+    if file:
+        file_bytes = await file.read()
+    elif image_url:
+        # Download from URL
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+            }
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                response = await client.get(image_url, headers=headers)
+                response.raise_for_status()
+                file_bytes = response.content
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to download image: {str(e)}")
+    else:
+        raise HTTPException(status_code=400, detail="Please provide either a file or image_url")
+    
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="No file data received")
+    
+    try:
+        # Detect if input is video or image
+        is_video = False
+        image_bytes = None
+        
+        # Try to determine file type
+        if file and file.filename:
+            ext = file.filename.lower().split('.')[-1]
+            if ext in ['mp4', 'mov', 'avi', 'mkv', 'webm']:
+                is_video = True
+        
+        # If it's a video, extract middle frame
+        if is_video:
+            print(f"[Registration] Detected video input, extracting frame...")
+            import tempfile
+            import os
+            
+            # Save video to temp file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp:
+                tmp.write(file_bytes)
+                tmp_path = tmp.name
+            
+            try:
+                from preprocessing import extract_video_frames
+                # Extract just one frame from the middle
+                frames = extract_video_frames(tmp_path, frame_interval=999999, max_duration=30)  # Large interval = 1 frame
+                
+                if not frames:
+                    raise HTTPException(status_code=400, detail="Failed to extract frame from video")
+                
+                # Convert first frame (PIL Image) to bytes
+                import io
+                img_byte_arr = io.BytesIO()
+                frames[0].save(img_byte_arr, format='JPEG')
+                image_bytes = img_byte_arr.getvalue()
+                
+                print(f"[Registration] Extracted frame from video ({len(image_bytes)} bytes)")
+                
+            finally:
+                # Clean up temp file
+                try:
+                    os.unlink(tmp_path)
+                except:
+                    pass
+        else:
+            # It's an image, use directly
+            image_bytes = file_bytes
+        
+        # Step 1: Validate it's a jaguar (without auto-registration)
+        result = classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage3_model=None, db=None)
+        
+        if not result.get('success'):
+            raise HTTPException(status_code=400, detail=result.get('error', 'Classification failed'))
+        
+        # Check if it's really a jaguar
+        species = result.get('final_species', '')
+        if species != 'jaguar':
+            raise HTTPException(
+                status_code=400,
+                detail=f"File does not contain a jaguar. Detected: {species}"
+            )
+        
+        # Step 2: Extract jaguar embedding
+        from jaguar_reid import extract_jaguar_embedding
+        import uuid
+        from datetime import datetime
+        
+        embedding = extract_jaguar_embedding(image_bytes, stage3_model, device=str(DEVICE))
+        
+        # Step 3: Check if jaguar already exists with this name
+        existing_jaguars = db.list_jaguars()
+        for jag in existing_jaguars:
+            if jag.get('name', '').lower() == jaguar_name.lower():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"A jaguar with the name '{jaguar_name}' already exists"
+                )
+        
+        # Step 4: Generate unique ID and register
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        jaguar_id = f"jaguar_{timestamp}"
+        
+        success = db.register_jaguar(
+            jaguar_id=jaguar_id,
+            name=jaguar_name,
+            embedding=embedding.tolist(),
+            image_url=None,
+            local_path=None
+        )
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to register jaguar in database")
+        
+        print(f"[Registration] Successfully registered: {jaguar_name} (ID: {jaguar_id})")
+        
+        return {
+            "success": True,
+            "message": f"Successfully registered jaguar: {jaguar_name}",
+            "jaguar_id": jaguar_id,
+            "jaguar_name": jaguar_name
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error during registration: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Registration error: {str(e)}")
 
 
 if __name__ == "__main__":

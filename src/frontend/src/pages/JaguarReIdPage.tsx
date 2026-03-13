@@ -212,6 +212,8 @@ const JaguarReIdPage = () => {
         formattedError = "Please upload a clear image of a jaguar";
       }
 
+      // Close naming dialog so error dialog is visible
+      setShowNamingDialog(false);
       setErrorDialogMessage(formattedError);
       setShowErrorDialog(true);
     } finally {
@@ -312,22 +314,7 @@ const JaguarReIdPage = () => {
               </Button>
             </div>
 
-            {loading && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-6 text-center"
-              >
-                <div className="inline-block px-6 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                  <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
-                    ⏱️ CPU Processing: This may take 5-10 minutes
-                  </p>
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                    Processing: Detection → Validation → Feature Extraction
-                  </p>
-                </div>
-              </motion.div>
-            )}
+          
 
             {errorMessage && !loading && (
               <motion.div
@@ -337,7 +324,7 @@ const JaguarReIdPage = () => {
               >
                 <div className="inline-block px-6 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg max-w-2xl">
                   <p className="text-sm text-red-700 dark:text-red-300 font-medium">
-                    ⚠️ {errorMessage}
+                    {errorMessage}
                   </p>
                   <p className="text-xs text-red-600 dark:text-red-400 mt-1">
                     Please upload a clear image of a jaguar
@@ -452,16 +439,6 @@ const JaguarReIdPage = () => {
         <AnimatePresence>
           {showErrorDialog && (
             <>
-              {/* Backdrop */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-                onClick={() => setShowErrorDialog(false)}
-              />
-
               {/* Dialog */}
               <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <motion.div

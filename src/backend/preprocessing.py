@@ -436,18 +436,20 @@ def classify_species(image_bytes, stage2_model):
     }
 
 
-def classify_image(image_bytes, animal_filter, stage1_model, stage2_model):
+def classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage3_model=None, db=None):
     """
-    Complete three-stage classification pipeline for images
+    Complete three-stage classification pipeline for images with jaguar re-identification
     
     Args:
         image_bytes: Raw image bytes
         animal_filter: Loaded AnimalFilter instance
         stage1_model: Loaded Stage 1 model (BigCat detector)
         stage2_model: Loaded Stage 2 model (Species classifier)
+        stage3_model: Loaded Stage 3 model (Jaguar Re-ID) - optional
+        db: Database instance for storing jaguar data - optional
     
     Returns:
-        dict with results from all stages or error message
+        dict with results from all stages, including jaguar identification if applicable
     """
     try:
         # Validate image
@@ -498,10 +500,99 @@ def classify_image(image_bytes, animal_filter, stage1_model, stage2_model):
     stage2_result = classify_species(image_bytes, stage2_model)
     
     print("="*50)
-    print(f"[SUCCESS] FINAL RESULT: {stage2_result['species'].upper()}")
+    print(f"[STAGE 2 RESULT] Species: {stage2_result['species'].upper()}")
+    print("="*50)
+    
+    # Stage 3: Jaguar Individual Re-Identification (if jaguar detected)
+    stage3_result = None
+    jaguar_info = None
+    
+    if stage2_result['species'] == 'jaguar' and stage3_model is not None and db is not None:
+        print("\n[Stage 3] Jaguar detected! Running individual re-identification...")
+        
+        try:
+            from jaguar_reid import extract_jaguar_embedding
+            from config import STAGE3_SIMILARITY_THRESHOLD, DEVICE
+            import uuid
+            from datetime import datetime
+            
+            # Extract jaguar facial embedding
+            embedding = extract_jaguar_embedding(image_bytes, stage3_model, device=str(DEVICE))
+            print(f"[Stage 3] Extracted embedding (size: {len(embedding)})")
+            
+            # Search for matching jaguar in database
+            match_found, matched_jaguar, similarity = db.find_matching_jaguar(
+                embedding.tolist(),
+                threshold=STAGE3_SIMILARITY_THRESHOLD
+            )
+            
+            if match_found:
+                # Known jaguar - update sighting
+                print(f"[Stage 3] MATCH FOUND: {matched_jaguar['name']} (similarity: {similarity:.2%})")
+                stage3_result = {
+                    'match': True,
+                    'jaguar_id': matched_jaguar['id'],
+                    'jaguar_name': matched_jaguar['name'],
+                    'similarity': float(similarity),
+                    'status': 'known'
+                }
+                jaguar_info = matched_jaguar
+                
+            else:
+                # New jaguar - auto-register with generated name
+                print(f"[Stage 3] NEW JAGUAR (best similarity: {similarity:.2%})")
+                
+                # Generate unique jaguar name
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                jaguar_id = f"jaguar_{timestamp}"
+                jaguar_name = f"Jaguar-{timestamp[:8]}-{uuid.uuid4().hex[:6]}"
+                
+                # Save image and register in database
+                success = db.register_jaguar(
+                    jaguar_id=jaguar_id,
+                    name=jaguar_name,
+                    embedding=embedding.tolist(),
+                    image_url=None,
+                    local_path=None,
+                    image_metadata={}
+                )
+                
+                if success:
+                    print(f"[Stage 3] Registered new jaguar: {jaguar_name}")
+                    stage3_result = {
+                        'match': False,
+                        'jaguar_id': jaguar_id,
+                        'jaguar_name': jaguar_name,
+                        'similarity': float(similarity),
+                        'status': 'new'
+                    }
+                    jaguar_info = {
+                        'id': jaguar_id,
+                        'name': jaguar_name
+                    }
+                else:
+                    print(f"[Stage 3] WARNING: Failed to register new jaguar")
+                    stage3_result = {
+                        'match': False,
+                        'error': 'Failed to register',
+                        'similarity': float(similarity)
+                    }
+                    
+        except Exception as e:
+            print(f"[Stage 3] ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+            stage3_result = {
+                'error': str(e)
+            }
+    
+    print("\n" + "="*50)
+    print(f"[SUCCESS] Classification complete")
+    if jaguar_info:
+        print(f"[Jaguar] {jaguar_info['name']} (ID: {jaguar_info['id']})")
     print("="*50 + "\n")
     
-    return {
+    result = {
         'success': True,
         'input_type': 'image',
         'stage0': stage0_result,
@@ -510,17 +601,28 @@ def classify_image(image_bytes, animal_filter, stage1_model, stage2_model):
         'final_species': stage2_result['species'],
         'final_confidence': stage2_result['confidence']
     }
+    
+    # Add Stage 3 results if available
+    if stage3_result:
+        result['stage3'] = stage3_result
+        if jaguar_info:
+            result['jaguar_id'] = jaguar_info['id']
+            result['jaguar_name'] = jaguar_info['name']
+    
+    return result
 
 
-def classify_video(video_bytes, animal_filter, stage1_model, stage2_model, max_duration=30):
+def classify_video(video_bytes, animal_filter, stage1_model, stage2_model, stage3_model=None, db=None, max_duration=30):
     """
-    Complete three-stage classification pipeline for videos
+    Complete three-stage classification pipeline for videos with jaguar re-identification
     
     Args:
         video_bytes: Raw video bytes
         animal_filter: Loaded AnimalFilter instance
         stage1_model: Loaded Stage 1 model (BigCat detector)
         stage2_model: Loaded Stage 2 model (Species classifier)
+        stage3_model: Loaded Stage 3 model (Jaguar Re-ID) - optional
+        db: Database instance - optional
         max_duration: Maximum allowed video duration in seconds
     
     Returns:
@@ -608,6 +710,85 @@ def classify_video(video_bytes, animal_filter, stage1_model, stage2_model, max_d
         print(f"[SUCCESS] FINAL RESULT: {stage2_result['species'].upper()}")
         print("="*50 + "\n")
         
+        # Stage 3: Jaguar Individual Re-Identification (if it's a jaguar)
+        stage3_result = {}
+        
+        if stage2_result['species'] == 'jaguar' and stage3_model and db:
+            print("[Stage3] Jaguar detected, attempting individual re-identification...")
+            
+            try:
+                # Use the middle frame for re-identification (most likely to have clear view)
+                middle_frame_idx = len(frames) // 2
+                middle_frame = frames[middle_frame_idx]
+                
+                # Convert PIL image to bytes for embedding extraction
+                import io
+                img_byte_arr = io.BytesIO()
+                middle_frame.save(img_byte_arr, format='JPEG')
+                frame_bytes = img_byte_arr.getvalue()
+                
+                from jaguar_reid import extract_jaguar_embedding, compute_similarity
+                from config import STAGE3_SIMILARITY_THRESHOLD
+                from datetime import datetime
+                
+                # Extract embedding from frame
+                embedding = extract_jaguar_embedding(frame_bytes, stage3_model, device=str(stage1_model.device))
+                
+                # Search database for matches
+                known_jaguars = db.list_jaguars()
+                best_match = None
+                best_similarity = 0.0
+                
+                for jaguar in known_jaguars:
+                    if 'embedding' in jaguar and jaguar['embedding']:
+                        stored_embedding = jaguar['embedding']
+                        similarity = compute_similarity(embedding, stored_embedding)
+                        
+                        if similarity > best_similarity:
+                            best_similarity = similarity
+                            best_match = jaguar
+                
+                # Check if match exceeds threshold
+                if best_match and best_similarity >= STAGE3_SIMILARITY_THRESHOLD:
+                    stage3_result = {
+                        'match': True,
+                        'jaguar_id': best_match['id'],
+                        'jaguar_name': best_match['name'],
+                        'similarity': float(best_similarity),
+                        'status': 'known'
+                    }
+                    print(f"[Stage3] Matched known jaguar: {best_match['name']} ({best_similarity*100:.1f}% similarity)")
+                else:
+                    # Auto-register new jaguar
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                    new_jaguar_id = f"jaguar_{timestamp}"
+                    new_jaguar_name = f"Jaguar-{datetime.now().strftime('%m%d')}-{len(known_jaguars)+1}"
+                    
+                    success = db.register_jaguar(
+                        jaguar_id=new_jaguar_id,
+                        name=new_jaguar_name,
+                        embedding=embedding.tolist(),
+                        image_url=None,
+                        local_path=None
+                    )
+                    
+                    if success:
+                        stage3_result = {
+                            'match': False,
+                            'jaguar_id': new_jaguar_id,
+                            'jaguar_name': new_jaguar_name,
+                            'similarity': 0.0,
+                            'status': 'new',
+                            'message': f'New jaguar auto-registered as {new_jaguar_name}'
+                        }
+                        print(f"[Stage3] New jaguar auto-registered: {new_jaguar_name}")
+                    else:
+                        print("[Stage3] Failed to register new jaguar")
+                        
+            except Exception as e:
+                print(f"[Stage3] Error during re-identification: {str(e)}")
+                stage3_result = {'error': str(e)}
+        
         return {
             'success': True,
             'input_type': 'video',
@@ -620,6 +801,7 @@ def classify_video(video_bytes, animal_filter, stage1_model, stage2_model, max_d
             'stage0': stage0_result,
             'stage1': stage1_result,
             'stage2': stage2_result,
+            'stage3': stage3_result if stage3_result else {},
             'final_species': stage2_result['species'],
             'final_confidence': stage2_result['confidence']
         }

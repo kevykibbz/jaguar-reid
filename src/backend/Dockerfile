@@ -33,13 +33,15 @@ COPY config.py .
 COPY models.py .
 COPY preprocessing.py .
 COPY species_classifier.py .
+COPY animal_filter.py .
+COPY jaguar_reid.py .
 COPY main.py .
 COPY requirements.txt .
-COPY animal_filter.py .
 
 # Copy only required models
 COPY models/stage1_bigcat_efficientnet_b2.pth models/
 COPY models/stage2_species_efficientnet_b2.pth models/
+COPY models/convnext_arcface_jaguar_final.pth models/
 COPY models/mappings/ models/mappings/
 
 # Copy API and utilities

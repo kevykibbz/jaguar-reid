@@ -48,6 +48,11 @@ STAGE1_MODEL_PATH = "models/stage1_bigcat_efficientnet_b2.pth"
 STAGE2_MODEL_PATH = "models/stage2_species_efficientnet_b2.pth"
 STAGE2_CLASS_MAPPING_PATH = "models/mappings/stage2_class_mapping.json"
 
+# Stage 3: Jaguar Individual Re-Identification (ConvNeXT + ArcFace)
+STAGE3_REID_MODEL_PATH = "models/convnext_arcface_jaguar_final.pth"
+STAGE3_EMBEDDING_SIZE = 512
+STAGE3_SIMILARITY_THRESHOLD = 0.70  # Minimum similarity to match existing jaguar
+
 # Load Stage 2 class mapping
 def load_stage2_classes():
     """Load species class names from mapping file."""
