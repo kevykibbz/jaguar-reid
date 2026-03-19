@@ -48,6 +48,7 @@ COPY models/mappings/ models/mappings/
 COPY api/ api/
 COPY utils/ utils/
 COPY database/ database/
+COPY services/ services/
 
 # Expose port
 EXPOSE 8000

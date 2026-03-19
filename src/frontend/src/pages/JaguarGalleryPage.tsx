@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -8,8 +8,10 @@ import {
   TrendingUp,
   Eye,
   Sparkles,
-  Cpu,
-  Zap,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
 } from "lucide-react";
 import {
   Card,
@@ -20,8 +22,16 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
-  fetchJaguars,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   fetchStatistics,
   fetchRecentActivity,
   API_BASE_URL,
@@ -35,29 +45,93 @@ const JaguarGalleryPage = () => {
   const [activity, setActivity] = useState<Activity[]>([]);
   const [statistics, setStatistics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [filterBySightings, setFilterBySightings] = useState<string>("all");
+  const pageSize = 12;
+  const debounceTimer = useRef<number | null>(null);
+
+  // Debounce search input
+  useEffect(() => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+    
+    debounceTimer.current = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setCurrentPage(1); // Reset to first page when search changes
+    }, 500);
+    
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, [searchQuery]);
 
   useEffect(() => {
     const abortController = new AbortController();
     loadData(abortController.signal);
     return () => abortController.abort();
-  }, []);
+  }, [currentPage, debouncedSearch, filterBySightings]);
 
   const loadData = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const [jaguarsData, activityData, statsData] = await Promise.all([
-        fetchJaguars(undefined, undefined, signal),
+      // Fetch jaguars with pagination and search
+      const jaguarsResponse = await fetch(
+        `${API_BASE_URL}/jaguars?page=${currentPage}&limit=${pageSize}${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ''}`,
+        { signal }
+      );
+      const jaguarsData = await jaguarsResponse.json();
+
+      // Fetch statistics and activity in parallel
+      const [activityData, statsData] = await Promise.all([
         fetchRecentActivity(20, signal),
         fetchStatistics(signal),
       ]);
 
-      setJaguars(jaguarsData);
+      let filteredJaguars = jaguarsData.jaguars || [];
+      
+      // Apply client-side filtering by sightings
+      if (filterBySightings !== "all") {
+        filteredJaguars = filteredJaguars.filter((j: JaguarImage) => {
+          const sightings = j.times_seen || 0;
+          switch (filterBySightings) {
+            case "high": return sightings >= 5;
+            case "medium": return sightings >= 3 && sightings < 5;
+            case "low": return sightings >= 1 && sightings < 3;
+            case "new": return sightings === 0;
+            default: return true;
+          }
+        });
+      }
+
+      setJaguars(filteredJaguars);
+      setTotalCount(jaguarsData.total || 0);
+      setTotalPages(jaguarsData.total_pages || 1);
       setActivity(activityData);
       setStatistics(statsData);
     } catch (error) {
-      console.error("Failed to load data:", error);
+      if (error instanceof Error && error.name !== 'AbortError') {
+        console.error("Failed to load data:", error);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSearch = (value: string) => {
+    setSearchQuery(value);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -153,6 +227,41 @@ const JaguarGalleryPage = () => {
       </div>
 
       <div className="max-w-7xl mx-auto p-8">
+        {/* Search and Filter Bar */}
+        <div className="mb-6 flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or ID..."
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Select value={filterBySightings} onValueChange={setFilterBySightings}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by sightings" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Jaguars</SelectItem>
+                <SelectItem value="high">High Activity (5+)</SelectItem>
+                <SelectItem value="medium">Medium (3-4)</SelectItem>
+                <SelectItem value="low">Low (1-2)</SelectItem>
+                <SelectItem value="new">New (0)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        {(searchQuery || filterBySightings !== "all") && (
+          <p className="text-sm text-muted-foreground mb-4">
+            {searchQuery && `Search: "${searchQuery}" • `}
+            {filterBySightings !== "all" && `Filter: ${filterBySightings} `}
+            • Found {jaguars.length} result{jaguars.length !== 1 ? 's' : ''}
+          </p>
+        )}
+
         {/* Statistics Cards */}
         {!loading ? (
           <motion.div
@@ -299,22 +408,8 @@ const JaguarGalleryPage = () => {
                       <div
                         className={`px-2 py-1 rounded-full text-xs font-medium ${getConfidenceLevel(jaguar.times_seen).bg} ${getConfidenceLevel(jaguar.times_seen).color}`}
                       >
-                        {getConfidenceLevel(jaguar.times_seen).percent}%
-                      </div>
-                    </div>
-                    {/* AI Model Badges */}
-                    <div className="flex gap-2 mt-2 flex-wrap">
-                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-500/10 text-blue-500 rounded-md text-xs font-medium">
-                        <Cpu className="h-3 w-3" />
-                        ConvNeXt
-                      </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/10 text-purple-500 rounded-md text-xs font-medium">
-                        <Zap className="h-3 w-3" />
-                        YOLOv8
-                      </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded-md text-xs font-medium">
                         {getConfidenceLevel(jaguar.times_seen).level}
-                      </span>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -380,6 +475,42 @@ const JaguarGalleryPage = () => {
               </Card>
             ))}
           </div>
+        )}
+
+        {/* Pagination Controls */}
+        {!loading && jaguars.length > 0 && totalPages > 1 && (
+          <motion.div
+            className="flex items-center justify-between mb-8 px-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+          >
+            <div className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages} • {totalCount} total jaguars
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="gap-2"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="gap-2"
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </motion.div>
         )}
 
         {/* Recent Activity */}

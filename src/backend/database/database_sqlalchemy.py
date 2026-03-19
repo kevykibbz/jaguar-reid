@@ -180,11 +180,11 @@ class JaguarDatabaseORM:
             session.close()
     
     def list_jaguars(self) -> List[Dict]:
-        """List all jaguars with their first image."""
+        """List all jaguars with their first image, sorted by creation date (newest first)."""
         session = self.get_session()
         try:
-            # Optimized query with LEFT JOIN LATERAL equivalent
-            jaguars = session.query(Jaguar).all()
+            # Optimized query sorted by created_at descending (newest first)
+            jaguars = session.query(Jaguar).order_by(desc(Jaguar.created_at)).all()
             
             result = []
             for jaguar in jaguars:
@@ -204,6 +204,7 @@ class JaguarDatabaseORM:
                     'first_seen': jaguar.first_seen.isoformat() + 'Z' if jaguar.first_seen else None,
                     'last_seen': jaguar.last_seen.isoformat() + 'Z' if jaguar.last_seen else None,
                     'times_seen': jaguar.times_seen,
+                    'created_at': jaguar.created_at.isoformat() + 'Z' if jaguar.created_at else None,
                     'image_url': first_image.image_url if first_image else None,
                     'file_name': first_image.file_name if first_image else None,
                     'images': [{

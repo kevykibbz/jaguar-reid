@@ -1,11 +1,9 @@
 import {
   Home,
   Upload,
-  History,
   Settings,
   Sparkles,
   Images,
-  Dna,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -71,7 +69,7 @@ export function AppSidebar() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <SidebarMenuItem>
+              {/* <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
                   isActive={location.pathname === "/species-analysis"}
@@ -81,8 +79,8 @@ export function AppSidebar() {
                     <span>Species Analysis</span>
                   </Link>
                 </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
+              </SidebarMenuItem> */}
+              {/* <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
                   isActive={location.pathname === "/reports"}
@@ -92,7 +90,7 @@ export function AppSidebar() {
                     <span>Reports</span>
                   </Link>
                 </SidebarMenuButton>
-              </SidebarMenuItem>
+              </SidebarMenuItem> */}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

@@ -24,6 +24,7 @@ from models import load_stage1_model, load_stage2_model, load_stage3_model
 from animal_filter import AnimalFilter
 from preprocessing import classify_image, classify_video
 from database.database_manager import get_database
+from services.azure_storage import AzureStorageManager
 
 
 # Request model for JSON input
@@ -58,11 +59,12 @@ stage1_model = None
 stage2_model = None
 stage3_model = None
 db = None
+azure_storage = None
 models_loaded = False
 
 def ensure_models_loaded():
     """Lazy load models on first request"""
-    global animal_filter, stage1_model, stage2_model, stage3_model, db, models_loaded
+    global animal_filter, stage1_model, stage2_model, stage3_model, db, azure_storage, models_loaded
     
     if models_loaded:
         return
@@ -97,6 +99,17 @@ def ensure_models_loaded():
         print(f"[WARNING] Database initialization failed: {e}")
         db = None
     
+    # Initialize Azure Storage
+    try:
+        azure_storage = AzureStorageManager()
+        if azure_storage.is_available():
+            print("[OK] Azure Storage initialized")
+        else:
+            print("[WARNING] Azure Storage not configured, using local storage")
+    except Exception as e:
+        print(f"[WARNING] Azure Storage initialization failed: {e}")
+        azure_storage = None
+    
     models_loaded = True
     print("\n" + "="*70)
     print("ALL MODELS LOADED - SYSTEM READY!")
@@ -130,19 +143,198 @@ def health_check():
 
 
 @app.get("/jaguars")
-def get_jaguars():
-    """Get all jaguars from database"""
+def get_jaguars(
+    page: int = 1,
+    limit: int = 50,
+    search: Optional[str] = None,
+    exclude_id: Optional[str] = None
+):
+    """
+    Get jaguars from database with pagination and search
+    
+    Args:
+        page: Page number (starts at 1)
+        limit: Number of results per page (max 100)
+        search: Search query for jaguar names
+        exclude_id: Exclude a specific jaguar ID from results
+    """
     ensure_models_loaded()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
     
     try:
-        jaguars = db.list_jaguars()
+        # Validate pagination params
+        if page < 1:
+            page = 1
+        if limit < 1 or limit > 100:
+            limit = 50
+        
+        # Get all jaguars
+        all_jaguars = db.list_jaguars()
+        
+        # Exclude specific jaguar if requested
+        if exclude_id:
+            all_jaguars = [j for j in all_jaguars if j.get('id') != exclude_id]
+        
+        # Apply search filter
+        if search and search.strip():
+            search_lower = search.strip().lower()
+            all_jaguars = [
+                j for j in all_jaguars 
+                if search_lower in j.get('name', '').lower() or 
+                   search_lower in j.get('id', '').lower()
+            ]
+        
+        # Calculate pagination
+        total_count = len(all_jaguars)
+        total_pages = (total_count + limit - 1) // limit
+        start_idx = (page - 1) * limit
+        end_idx = start_idx + limit
+        
+        # Get paginated results
+        paginated_jaguars = all_jaguars[start_idx:end_idx]
+        
         return {
             "success": True,
-            "count": len(jaguars),
-            "jaguars": jaguars
+            "count": len(paginated_jaguars),
+            "total": total_count,
+            "page": page,
+            "page_size": limit,
+            "total_pages": total_pages,
+            "jaguars": paginated_jaguars
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@app.get("/jaguar/{jaguar_id}")
+def get_jaguar_by_id(jaguar_id: str):
+    """
+    Get details of a specific jaguar by ID
+    
+    Args:
+        jaguar_id: The unique ID of the jaguar
+    
+    Returns:
+        JSON with jaguar details including images, sightings, and metadata
+    """
+    ensure_models_loaded()
+    if not db:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    try:
+        # Get all jaguars and find the specific one
+        all_jaguars = db.list_jaguars()
+        jaguar = next((j for j in all_jaguars if j.get('id') == jaguar_id), None)
+        
+        if not jaguar:
+            raise HTTPException(status_code=404, detail=f"Jaguar with ID '{jaguar_id}' not found")
+        
+        return jaguar
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@app.get("/jaguar/{jaguar_id}/comments")
+def get_jaguar_comments(jaguar_id: str):
+    """
+    Get comments for a specific jaguar
+    
+    Args:
+        jaguar_id: The unique ID of the jaguar
+    
+    Returns:
+        JSON with list of comments (currently returns empty array as comments not implemented in DB)
+    """
+    ensure_models_loaded()
+    if not db:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    try:
+        # Verify jaguar exists
+        all_jaguars = db.list_jaguars()
+        jaguar = next((j for j in all_jaguars if j.get('id') == jaguar_id), None)
+        
+        if not jaguar:
+            raise HTTPException(status_code=404, detail=f"Jaguar with ID '{jaguar_id}' not found")
+        
+        # TODO: Implement comments in database
+        # For now, return empty comments array
+        return []
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@app.get("/jaguar/{jaguar_id}/likes")
+def get_jaguar_likes(jaguar_id: str):
+    """
+    Get like count and user like status for a specific jaguar
+    
+    Args:
+        jaguar_id: The unique ID of the jaguar
+    
+    Returns:
+        JSON with like count and whether current user has liked
+    """
+    ensure_models_loaded()
+    if not db:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    try:
+        # Verify jaguar exists
+        all_jaguars = db.list_jaguars()
+        jaguar = next((j for j in all_jaguars if j.get('id') == jaguar_id), None)
+        
+        if not jaguar:
+            raise HTTPException(status_code=404, detail=f"Jaguar with ID '{jaguar_id}' not found")
+        
+        # TODO: Implement likes in database with user tracking
+        # For now, return placeholder data
+        return {
+            "count": 0,
+            "liked": False
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@app.post("/jaguar/{jaguar_id}/likes")
+def toggle_jaguar_like(jaguar_id: str):
+    """
+    Toggle like status for a specific jaguar
+    
+    Args:
+        jaguar_id: The unique ID of the jaguar
+    
+    Returns:
+        JSON with updated like count and user like status
+    """
+    ensure_models_loaded()
+    if not db:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    try:
+        # Verify jaguar exists
+        all_jaguars = db.list_jaguars()
+        jaguar = next((j for j in all_jaguars if j.get('id') == jaguar_id), None)
+        
+        if not jaguar:
+            raise HTTPException(status_code=404, detail=f"Jaguar with ID '{jaguar_id}' not found")
+        
+        # TODO: Implement likes in database with user tracking
+        # For now, return placeholder data
+        return {
+            "liked": True,
+            "count": 1
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
@@ -290,10 +482,10 @@ async def classify(
         # Run appropriate classification
         if is_video:
             print("[Detector] Input type: VIDEO (max 30 seconds)")
-            result = classify_video(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model, db, max_duration=30)
+            result = classify_video(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model, db, azure_storage, max_duration=30)
         else:
             print("[Detector] Input type: IMAGE")
-            result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model, db)
+            result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model, db, azure_storage)
         
         if not result.get('success'):
             raise HTTPException(
@@ -356,7 +548,7 @@ async def predict_from_url(request: Request):
             file_bytes = response.content
         
         # Classify
-        result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model, db)
+        result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model, db, azure_storage)
         
         if not result.get('success'):
             raise HTTPException(status_code=400, detail=result.get('error', 'Classification failed'))
@@ -397,7 +589,7 @@ async def predict_binary(request: Request):
             file_bytes = response.content
         
         # Classify - full pipeline but we'll return only stage1
-        result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model, db)
+        result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model, db, azure_storage)
         
         if not result.get('success'):
             raise HTTPException(status_code=400, detail=result.get('error', 'Classification failed'))
@@ -443,7 +635,7 @@ async def predict_species(request: Request):
             file_bytes = response.content
         
         # Classify - full pipeline but we'll return only stage2
-        result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model, db)
+        result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model, db, azure_storage)
         
         if not result.get('success'):
             raise HTTPException(status_code=400, detail=result.get('error', 'Classification failed'))
@@ -652,7 +844,7 @@ async def register_jaguar(
             image_bytes = file_bytes
         
         # Step 1: Validate it's a jaguar (without auto-registration)
-        result = classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage3_model=None, db=None)
+        result = classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage3_model=None, db=None, azure_storage=None)
         
         if not result.get('success'):
             raise HTTPException(status_code=400, detail=result.get('error', 'Classification failed'))
@@ -685,12 +877,50 @@ async def register_jaguar(
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         jaguar_id = f"jaguar_{timestamp}"
         
+        # Step 5: Upload image to Azure Blob Storage
+        image_url = None
+        local_path = None
+        
+        if azure_storage and azure_storage.is_available():
+            try:
+                print(f"[Registration] Uploading image to Azure Blob Storage...")
+                success_upload, blob_url = azure_storage.upload_image(
+                    image_bytes=image_bytes,
+                    jaguar_id=jaguar_id,
+                    filename=f"{jaguar_name}.jpg"
+                )
+                if success_upload:
+                    image_url = blob_url
+                    print(f"[Registration] Image uploaded to Azure: {blob_url}")
+                else:
+                    print(f"[Registration] WARNING: Failed to upload to Azure, using local storage")
+            except Exception as upload_error:
+                print(f"[Registration] WARNING: Azure upload failed: {upload_error}")
+        else:
+            print(f"[Registration] Azure Storage not available, saving locally")
+        
+        # If Azure upload failed, save locally as fallback
+        if not image_url:
+            try:
+                # Save to local database/images folder
+                local_dir = Path("./database/images")
+                local_dir.mkdir(parents=True, exist_ok=True)
+                local_filename = f"{jaguar_id}_{timestamp}.jpg"
+                local_path = str(local_dir / local_filename)
+                
+                with open(local_path, 'wb') as f:
+                    f.write(image_bytes)
+                print(f"[Registration] Image saved locally: {local_path}")
+            except Exception as save_error:
+                print(f"[Registration] WARNING: Failed to save locally: {save_error}")
+        
+        # Step 6: Register jaguar with image reference
         success = db.register_jaguar(
             jaguar_id=jaguar_id,
             name=jaguar_name,
             embedding=embedding.tolist(),
-            image_url=None,
-            local_path=None
+            image_url=image_url,
+            local_path=local_path
         )
         
         if not success:
@@ -702,7 +932,8 @@ async def register_jaguar(
             "success": True,
             "message": f"Successfully registered jaguar: {jaguar_name}",
             "jaguar_id": jaguar_id,
-            "jaguar_name": jaguar_name
+            "jaguar_name": jaguar_name,
+            "image_url": image_url
         }
         
     except HTTPException:

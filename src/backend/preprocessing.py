@@ -436,7 +436,7 @@ def classify_species(image_bytes, stage2_model):
     }
 
 
-def classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage3_model=None, db=None):
+def classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage3_model=None, db=None, azure_storage=None):
     """
     Complete three-stage classification pipeline for images with jaguar re-identification
     
@@ -447,6 +447,7 @@ def classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage
         stage2_model: Loaded Stage 2 model (Species classifier)
         stage3_model: Loaded Stage 3 model (Jaguar Re-ID) - optional
         db: Database instance for storing jaguar data - optional
+        azure_storage: Azure Storage Manager for saving images - optional
     
     Returns:
         dict with results from all stages, including jaguar identification if applicable
@@ -547,13 +548,45 @@ def classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage
                 jaguar_id = f"jaguar_{timestamp}"
                 jaguar_name = f"Jaguar-{timestamp[:8]}-{uuid.uuid4().hex[:6]}"
                 
+                # Upload image to Azure or save locally
+                image_url = None
+                local_path = None
+                
+                if azure_storage and azure_storage.is_available():
+                    try:
+                        print(f"[Stage 3] Uploading image to Azure Blob Storage...")
+                        success_upload, blob_url = azure_storage.upload_image(
+                            image_bytes=image_bytes,
+                            jaguar_id=jaguar_id,
+                            filename=f"{jaguar_name}.jpg"
+                        )
+                        if success_upload:
+                            image_url = blob_url
+                            print(f"[Stage 3] Image uploaded: {blob_url}")
+                    except Exception as upload_error:
+                        print(f"[Stage 3] WARNING: Azure upload failed: {upload_error}")
+                
+                # Fallback to local storage if Azure failed
+                if not image_url:
+                    try:
+                        from pathlib import Path
+                        local_dir = Path("./database/images")
+                        local_dir.mkdir(parents=True, exist_ok=True)
+                        local_filename = f"{jaguar_id}_{timestamp}.jpg"
+                        local_path = str(local_dir / local_filename)
+                        with open(local_path, 'wb') as f:
+                            f.write(image_bytes)
+                        print(f"[Stage 3] Image saved locally: {local_path}")
+                    except Exception as save_error:
+                        print(f"[Stage 3] WARNING: Failed to save locally: {save_error}")
+                
                 # Save image and register in database
                 success = db.register_jaguar(
                     jaguar_id=jaguar_id,
                     name=jaguar_name,
                     embedding=embedding.tolist(),
-                    image_url=None,
-                    local_path=None,
+                    image_url=image_url,
+                    local_path=local_path,
                     image_metadata={}
                 )
                 
@@ -564,11 +597,13 @@ def classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage
                         'jaguar_id': jaguar_id,
                         'jaguar_name': jaguar_name,
                         'similarity': float(similarity),
-                        'status': 'new'
+                        'status': 'new',
+                        'image_url': image_url
                     }
                     jaguar_info = {
                         'id': jaguar_id,
-                        'name': jaguar_name
+                        'name': jaguar_name,
+                        'image_url': image_url
                     }
                 else:
                     print(f"[Stage 3] WARNING: Failed to register new jaguar")
@@ -612,7 +647,7 @@ def classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage
     return result
 
 
-def classify_video(video_bytes, animal_filter, stage1_model, stage2_model, stage3_model=None, db=None, max_duration=30):
+def classify_video(video_bytes, animal_filter, stage1_model, stage2_model, stage3_model=None, db=None, azure_storage=None, max_duration=30):
     """
     Complete three-stage classification pipeline for videos with jaguar re-identification
     
@@ -623,6 +658,7 @@ def classify_video(video_bytes, animal_filter, stage1_model, stage2_model, stage
         stage2_model: Loaded Stage 2 model (Species classifier)
         stage3_model: Loaded Stage 3 model (Jaguar Re-ID) - optional
         db: Database instance - optional
+        azure_storage: Azure Storage Manager for saving images - optional
         max_duration: Maximum allowed video duration in seconds
     
     Returns:
@@ -764,12 +800,44 @@ def classify_video(video_bytes, animal_filter, stage1_model, stage2_model, stage
                     new_jaguar_id = f"jaguar_{timestamp}"
                     new_jaguar_name = f"Jaguar-{datetime.now().strftime('%m%d')}-{len(known_jaguars)+1}"
                     
+                    # Upload frame image to Azure or save locally
+                    image_url = None
+                    local_path = None
+                    
+                    if azure_storage and azure_storage.is_available():
+                        try:
+                            print(f"[Stage3] Uploading frame to Azure Blob Storage...")
+                            success_upload, blob_url = azure_storage.upload_image(
+                                image_bytes=frame_bytes,
+                                jaguar_id=new_jaguar_id,
+                                filename=f"{new_jaguar_name}.jpg"
+                            )
+                            if success_upload:
+                                image_url = blob_url
+                                print(f"[Stage3] Frame uploaded: {blob_url}")
+                        except Exception as upload_error:
+                            print(f"[Stage3] WARNING: Azure upload failed: {upload_error}")
+                    
+                    # Fallback to local storage
+                    if not image_url:
+                        try:
+                            from pathlib import Path
+                            local_dir = Path("./database/images")
+                            local_dir.mkdir(parents=True, exist_ok=True)
+                            local_filename = f"{new_jaguar_id}_{timestamp}.jpg"
+                            local_path = str(local_dir / local_filename)
+                            with open(local_path, 'wb') as f:
+                                f.write(frame_bytes)
+                            print(f"[Stage3] Frame saved locally: {local_path}")
+                        except Exception as save_error:
+                            print(f"[Stage3] WARNING: Failed to save locally: {save_error}")
+                    
                     success = db.register_jaguar(
                         jaguar_id=new_jaguar_id,
                         name=new_jaguar_name,
                         embedding=embedding.tolist(),
-                        image_url=None,
-                        local_path=None
+                        image_url=image_url,
+                        local_path=local_path
                     )
                     
                     if success:
@@ -779,7 +847,8 @@ def classify_video(video_bytes, animal_filter, stage1_model, stage2_model, stage
                             'jaguar_name': new_jaguar_name,
                             'similarity': 0.0,
                             'status': 'new',
-                            'message': f'New jaguar auto-registered as {new_jaguar_name}'
+                            'message': f'New jaguar auto-registered as {new_jaguar_name}',
+                            'image_url': image_url
                         }
                         print(f"[Stage3] New jaguar auto-registered: {new_jaguar_name}")
                     else:
