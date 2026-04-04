@@ -169,7 +169,13 @@ class JaguarDatabaseORM:
                 
                 return (True, jaguar_data, best_similarity)
             
-            # No match found
+            # No match found — still return best_match so callers can show which individual was closest
+            if best_match is not None:
+                closest_data = {
+                    'id': best_match.id,
+                    'name': best_match.name,
+                }
+                return (False, closest_data, best_similarity)
             return (False, None, best_similarity)
             
         except Exception as e:

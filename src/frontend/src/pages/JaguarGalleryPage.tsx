@@ -12,6 +12,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  MapPin,
+  Camera,
+  User,
+  Clock,
 } from "lucide-react";
 import {
   Card,
@@ -393,64 +397,80 @@ const JaguarGalleryPage = () => {
                 }}
                 whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
               >
-                <Card className="backdrop-blur-sm overflow-hidden hover:border-emerald-500/50 hover:shadow-lg transition-all group">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <CardTitle
-                          className="text-xl group-hover:text-emerald-500 transition-colors"
-                          title={jaguar.name}
-                        >
-                          {truncateName(jaguar.name)}
-                        </CardTitle>
-                        <CardDescription>{jaguar.id}</CardDescription>
-                      </div>
-                      <div
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${getConfidenceLevel(jaguar.times_seen).bg} ${getConfidenceLevel(jaguar.times_seen).color}`}
-                      >
-                        {getConfidenceLevel(jaguar.times_seen).level}
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
+                <Card
+                  className="backdrop-blur-sm overflow-hidden hover:border-emerald-500/50 hover:shadow-lg transition-all group cursor-pointer"
+                  onClick={() => navigate(`/image/${jaguar.id}`)}
+                >
+                  {/* Image with overlay */}
+                  <div className="relative aspect-video overflow-hidden bg-muted">
                     {getImageUrl(jaguar) ? (
-                      <div
-                        className="relative aspect-video bg-muted rounded-lg mb-4 overflow-hidden cursor-pointer hover:opacity-95 transition-opacity"
-                        onClick={() => navigate(`/image/${jaguar.id}`)}
-                      >
-                        <img
-                          src={getImageUrl(jaguar)!}
-                          alt={jaguar.name}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.src = `https://via.placeholder.com/400x200?text=${encodeURIComponent(jaguar.name)}`;
-                          }}
-                        />
-                      </div>
+                      <img
+                        src={getImageUrl(jaguar)!}
+                        alt={jaguar.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        loading="lazy"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = `https://via.placeholder.com/400x200?text=${encodeURIComponent(jaguar.name)}`;
+                        }}
+                      />
                     ) : (
-                      <div className="relative aspect-video bg-muted rounded-lg mb-4 flex items-center justify-center">
+                      <div className="w-full h-full flex items-center justify-center">
                         <ImageIcon className="h-12 w-12 text-muted-foreground" />
                       </div>
                     )}
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <motion.div
-                        className="flex items-center gap-2"
-                        whileHover={{ x: 2 }}
-                      >
-                        <Eye className="h-4 w-4 text-purple-500" />
-                        <span>{jaguar.times_seen} sightings</span>
-                      </motion.div>
-                      <motion.div
-                        className="flex items-center gap-2"
-                        whileHover={{ x: -2 }}
-                      >
-                        <Calendar className="h-4 w-4 text-blue-500" />
-                        <span>
-                          {new Date(jaguar.last_seen).toLocaleDateString()}
-                        </span>
-                      </motion.div>
+                    {/* Gradient overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                    {/* Species chip top-left */}
+                    <span className="absolute top-2 left-2 bg-emerald-500/90 text-white text-xs px-2 py-0.5 rounded-full font-medium">
+                      Jaguar
+                    </span>
+                    {/* Confidence badge top-right */}
+                    <span className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium ${getConfidenceLevel(jaguar.times_seen).bg} ${getConfidenceLevel(jaguar.times_seen).color}`}>
+                      {getConfidenceLevel(jaguar.times_seen).level}
+                    </span>
+                    {/* Name bottom of image */}
+                    <div className="absolute bottom-2 left-3 right-3">
+                      <p className="font-bold text-white text-base leading-tight truncate" title={jaguar.name}>
+                        {truncateName(jaguar.name)}
+                      </p>
+                      <p className="text-white/60 text-xs font-mono">{jaguar.id.slice(0, 12)}…</p>
+                    </div>
+                  </div>
+
+                  {/* Metadata grid */}
+                  <CardContent className="p-3 pt-3">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <Eye className="h-3.5 w-3.5 text-purple-500 flex-shrink-0" />
+                        <span>{jaguar.times_seen} sighting{jaguar.times_seen !== 1 ? "s" : ""}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+                        <span className="truncate">Last {new Date(jaguar.last_seen).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
+                        <span className="truncate">First {new Date(jaguar.first_seen).toLocaleDateString()}</span>
+                      </div>
+                      {jaguar.location_name && (
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5 text-orange-500 flex-shrink-0" />
+                          <span className="truncate">{jaguar.location_name}</span>
+                        </div>
+                      )}
+                      {jaguar.camera_trap_id && (
+                        <div className="flex items-center gap-1.5 col-span-2">
+                          <Camera className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                          <span className="truncate">Trap: {jaguar.camera_trap_id}</span>
+                        </div>
+                      )}
+                      {jaguar.photographer && (
+                        <div className="flex items-center gap-1.5 col-span-2">
+                          <User className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                          <span className="truncate">{jaguar.photographer}</span>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

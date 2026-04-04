@@ -101,10 +101,10 @@ const ResultsDisplay = ({
                       className="text-center"
                     >
                       <div className="text-5xl font-bold mb-1">
-                        {percentage}%
+                        {match ? `${Math.round(similarity * 100)}%` : `${percentage}%`}
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        Match Score
+                        {match ? "Identity Match" : "Species Confidence"}
                       </div>
                     </motion.div>
                   </div>
@@ -216,11 +216,11 @@ const ResultsDisplay = ({
                     <div className="flex items-center gap-2 mb-2">
                       <TrendingUp className="h-4 w-4 text-primary" />
                       <span className="text-sm font-medium">
-                        {match ? "Similarity" : "Confidence"}
+                        {match ? "Re-ID Similarity" : "Species Confidence"}
                       </span>
                     </div>
                     <div className="text-2xl font-bold">
-                      {match ? similarity.toFixed(4) : `${percentage}%`}
+                      {match ? `${(similarity * 100).toFixed(1)}%` : `${percentage}%`}
                     </div>
                   </div>
                   {match && (
@@ -235,11 +235,20 @@ const ResultsDisplay = ({
                 </div>
 
                 {/* Threshold Info */}
-                {match && (
+                {match ? (
                   <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
                     <p>
-                      <strong>Match Threshold:</strong> 0.80 • Scores above this
-                      indicate a confident match with an existing jaguar
+                      <strong>Re-ID Similarity:</strong> how closely the spotted pattern
+                      of this jaguar matches <strong>{jaguar_name || jaguar_id}</strong> in the database.
+                      Threshold: 70% minimum for a confident match.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
+                    <p>
+                      <strong>Species Confidence:</strong> the AI is {percentage}% confident
+                      this is a jaguar (species classification). This individual was
+                      <strong> not found</strong> in the database — please give them a name below.
                     </p>
                   </div>
                 )}

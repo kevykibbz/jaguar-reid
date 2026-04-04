@@ -540,78 +540,15 @@ def classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage
                 jaguar_info = matched_jaguar
                 
             else:
-                # New jaguar - auto-register with generated name
-                print(f"[Stage 3] NEW JAGUAR (best similarity: {similarity:.2%})")
-                
-                # Generate unique jaguar name
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                jaguar_id = f"jaguar_{timestamp}"
-                jaguar_name = f"Jaguar-{timestamp[:8]}-{uuid.uuid4().hex[:6]}"
-                
-                # Upload image to Azure or save locally
-                image_url = None
-                local_path = None
-                
-                if azure_storage and azure_storage.is_available():
-                    try:
-                        print(f"[Stage 3] Uploading image to Azure Blob Storage...")
-                        success_upload, blob_url = azure_storage.upload_image(
-                            image_bytes=image_bytes,
-                            jaguar_id=jaguar_id,
-                            filename=f"{jaguar_name}.jpg"
-                        )
-                        if success_upload:
-                            image_url = blob_url
-                            print(f"[Stage 3] Image uploaded: {blob_url}")
-                    except Exception as upload_error:
-                        print(f"[Stage 3] WARNING: Azure upload failed: {upload_error}")
-                
-                # Fallback to local storage if Azure failed
-                if not image_url:
-                    try:
-                        from pathlib import Path
-                        local_dir = Path("./database/images")
-                        local_dir.mkdir(parents=True, exist_ok=True)
-                        local_filename = f"{jaguar_id}_{timestamp}.jpg"
-                        local_path = str(local_dir / local_filename)
-                        with open(local_path, 'wb') as f:
-                            f.write(image_bytes)
-                        print(f"[Stage 3] Image saved locally: {local_path}")
-                    except Exception as save_error:
-                        print(f"[Stage 3] WARNING: Failed to save locally: {save_error}")
-                
-                # Save image and register in database
-                success = db.register_jaguar(
-                    jaguar_id=jaguar_id,
-                    name=jaguar_name,
-                    embedding=embedding.tolist(),
-                    image_url=image_url,
-                    local_path=local_path,
-                    image_metadata={}
-                )
-                
-                if success:
-                    print(f"[Stage 3] Registered new jaguar: {jaguar_name}")
-                    stage3_result = {
-                        'match': False,
-                        'jaguar_id': jaguar_id,
-                        'jaguar_name': jaguar_name,
-                        'similarity': float(similarity),
-                        'status': 'new',
-                        'image_url': image_url
-                    }
-                    jaguar_info = {
-                        'id': jaguar_id,
-                        'name': jaguar_name,
-                        'image_url': image_url
-                    }
-                else:
-                    print(f"[Stage 3] WARNING: Failed to register new jaguar")
-                    stage3_result = {
-                        'match': False,
-                        'error': 'Failed to register',
-                        'similarity': float(similarity)
-                    }
+                # New jaguar - NOT auto-registered; user will name it via /register
+                print(f"[Stage 3] NEW JAGUAR (best similarity: {similarity:.2%}) - awaiting user naming")
+                stage3_result = {
+                    'match': False,
+                    'similarity': float(similarity),
+                    'status': 'new',
+                    'closest_jaguar_name': matched_jaguar['name'] if matched_jaguar else None,
+                    'closest_jaguar_id': matched_jaguar['id'] if matched_jaguar else None,
+                }
                     
         except Exception as e:
             print(f"[Stage 3] ERROR: {e}")
@@ -795,65 +732,14 @@ def classify_video(video_bytes, animal_filter, stage1_model, stage2_model, stage
                     }
                     print(f"[Stage3] Matched known jaguar: {best_match['name']} ({best_similarity*100:.1f}% similarity)")
                 else:
-                    # Auto-register new jaguar
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                    new_jaguar_id = f"jaguar_{timestamp}"
-                    new_jaguar_name = f"Jaguar-{datetime.now().strftime('%m%d')}-{len(known_jaguars)+1}"
-                    
-                    # Upload frame image to Azure or save locally
-                    image_url = None
-                    local_path = None
-                    
-                    if azure_storage and azure_storage.is_available():
-                        try:
-                            print(f"[Stage3] Uploading frame to Azure Blob Storage...")
-                            success_upload, blob_url = azure_storage.upload_image(
-                                image_bytes=frame_bytes,
-                                jaguar_id=new_jaguar_id,
-                                filename=f"{new_jaguar_name}.jpg"
-                            )
-                            if success_upload:
-                                image_url = blob_url
-                                print(f"[Stage3] Frame uploaded: {blob_url}")
-                        except Exception as upload_error:
-                            print(f"[Stage3] WARNING: Azure upload failed: {upload_error}")
-                    
-                    # Fallback to local storage
-                    if not image_url:
-                        try:
-                            from pathlib import Path
-                            local_dir = Path("./database/images")
-                            local_dir.mkdir(parents=True, exist_ok=True)
-                            local_filename = f"{new_jaguar_id}_{timestamp}.jpg"
-                            local_path = str(local_dir / local_filename)
-                            with open(local_path, 'wb') as f:
-                                f.write(frame_bytes)
-                            print(f"[Stage3] Frame saved locally: {local_path}")
-                        except Exception as save_error:
-                            print(f"[Stage3] WARNING: Failed to save locally: {save_error}")
-                    
-                    success = db.register_jaguar(
-                        jaguar_id=new_jaguar_id,
-                        name=new_jaguar_name,
-                        embedding=embedding.tolist(),
-                        image_url=image_url,
-                        local_path=local_path
-                    )
-                    
-                    if success:
-                        stage3_result = {
-                            'match': False,
-                            'jaguar_id': new_jaguar_id,
-                            'jaguar_name': new_jaguar_name,
-                            'similarity': 0.0,
-                            'status': 'new',
-                            'message': f'New jaguar auto-registered as {new_jaguar_name}',
-                            'image_url': image_url
-                        }
-                        print(f"[Stage3] New jaguar auto-registered: {new_jaguar_name}")
-                    else:
-                        print("[Stage3] Failed to register new jaguar")
-                        
+                    # New jaguar - NOT auto-registered; user will name it via /register
+                    stage3_result = {
+                        'match': False,
+                        'similarity': float(best_similarity),
+                        'status': 'new'
+                    }
+                    print(f"[Stage3] New jaguar detected (best similarity: {best_similarity*100:.1f}%) - awaiting user naming")
+                            
             except Exception as e:
                 print(f"[Stage3] Error during re-identification: {str(e)}")
                 stage3_result = {'error': str(e)}

@@ -5,6 +5,7 @@ import ImageDetailPage from "@/pages/ImageDetailPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { ReportsPage } from "@/pages/ReportsPage";
 import SpeciesAnalysisPage from "@/pages/SpeciesAnalysisPage";
+import IndividualsPage from "@/pages/IndividualsPage";
 import { ThemeProvider } from "@/contexts/ThemeProvider";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/layout/AppSidebar";
@@ -21,6 +22,7 @@ function App() {
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/upload" element={<JaguarReIdPage />} />
                 <Route path="/gallery" element={<JaguarGalleryPage />} />
+                <Route path="/individuals" element={<IndividualsPage />} />
                 <Route path="/image/:jaguarId" element={<ImageDetailPage />} />
                 <Route
                   path="/species-analysis"

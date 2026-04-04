@@ -28,6 +28,8 @@ interface MatchResult {
   similarity: number;
   species?: string;
   all_scores?: Record<string, number>;
+  closest_jaguar_name?: string | null;
+  closest_jaguar_id?: string | null;
 }
 
 const JaguarReIdPage = () => {
@@ -191,7 +193,7 @@ const JaguarReIdPage = () => {
         match: false,
         jaguar_id: data.jaguar_id,
         jaguar_name: newJaguarName.trim(),
-        confidence: 1.0,
+        confidence: matchResult?.confidence ?? 1.0,
         similarity: 0,
       });
     } catch (error) {
@@ -345,17 +347,20 @@ const JaguarReIdPage = () => {
               </DialogTitle>
               <DialogDescription>
                 This jaguar doesn't match any known individual in our database.
-                {matchResult?.similarity !== undefined && (
+                {matchResult?.similarity !== undefined && matchResult.similarity > 0 && (
                   <span className="block mt-2 text-sm font-medium">
-                    Best match similarity:{" "}
-                    {(matchResult.similarity * 100).toFixed(1)}%
+                    Closest existing individual:
+                    {matchResult.closest_jaguar_name ? (
+                      <strong> {matchResult.closest_jaguar_name}</strong>
+                    ) : null}{" "}
+                    at {(matchResult.similarity * 100).toFixed(1)}%
                     <span className="text-xs text-muted-foreground ml-1">
-                      (threshold: 75%)
+                      (below the 70% match threshold)
                     </span>
                   </span>
                 )}
                 <span className="block mt-2">
-                  Please assign a name to register it.
+                  Give this new individual a name to register them.
                 </span>
               </DialogDescription>
             </DialogHeader>
@@ -382,8 +387,11 @@ const JaguarReIdPage = () => {
                   <div className="space-y-2">
                     <label className="text-sm font-medium flex items-center gap-2">
                       <Sparkles className="h-4 w-4 text-purple-500" />
-                      AI Suggestions
+                      AI Name Suggestions
                     </label>
+                    <p className="text-xs text-muted-foreground">
+                      These are suggested <strong>names for this new individual</strong> — not jaguars already in the database.
+                    </p>
                     <div className="flex flex-wrap gap-2">
                       {suggestedNames.map((suggestion, idx) => (
                         <button

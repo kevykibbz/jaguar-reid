@@ -665,50 +665,64 @@ async def suggest_jaguar_names(
     geographical regions, and cultural significance.
     """
     import random
-    from datetime import datetime
+    import urllib.request
     
-    # Base name categories with suggestions
-    nature_names = [
+    # Fallback names used when iNaturalist is unavailable
+    fallback_names = [
         ("Luna", "Moon", "Named after the moon, symbolizing nocturnal hunting"),
-        ("Sol", "Sun", "Representing the golden spotted coat"),
-        ("Rio", "River", "For jaguars found near waterways"),
-        ("Sierra", "Mountain", "From mountain ranges"),
-        ("Storm", "Weather", "For powerful and fierce jaguars"),
-        ("Shadow", "Nature", "Symbolizing stealth and camouflage"),
-        ("Blaze", "Fire", "For jaguars with distinctive bright patterns"),
-        ("Thunder", "Weather", "Representing power and strength"),
-    ]
-    
-    indigenous_names = [
-        ("Itzamná", "Mayan", "Ancient Mayan deity associated with jaguars"),
         ("Balam", "Mayan", "Means 'jaguar' in Mayan"),
-        ("Ix Chel", "Mayan", "Goddess associated with jaguars"),
+        ("Rio", "River", "For jaguars found near waterways"),
+        ("Kukulkan", "Mayan", "Ancient Mayan feathered serpent deity"),
+        ("Storm", "Weather", "For powerful and fierce jaguars"),
+        ("Guarani", "Guarani", "Named after the Guarani people of South America"),
+        ("Shadow", "Nature", "Symbolizing stealth and camouflage"),
         ("Tepeyollotl", "Aztec", "Earth deity symbolized by jaguar"),
-        ("Yaguareté", "Guaraní", "Traditional indigenous name for jaguar"),
-        ("Kukulkan", "Mayan", "Feathered serpent deity"),
-    ]
-    
-    personality_names = [
-        ("Phoenix", "Rebirth", "For resilient jaguars"),
-        ("Ranger", "Explorer", "For jaguars with large territories"),
-        ("Sage", "Wisdom", "For older, experienced jaguars"),
-        ("Mystique", "Mystery", "For elusive individuals"),
-        ("Valor", "Courage", "For bold jaguars"),
         ("Onyx", "Gemstone", "For dark-spotted jaguars"),
-        ("Amber", "Gemstone", "For golden-coated jaguars"),
+        ("Valor", "Courage", "For bold jaguars"),
     ]
-    
-    # Combine and randomly select
-    all_names = nature_names + indigenous_names + personality_names
-    random.shuffle(all_names)
-    
+
+    # --- iNaturalist: fetch place names from recent jaguar observations ---
+    place_names = []
+    try:
+        inat_url = (
+            "https://api.inaturalist.org/v1/observations"
+            "?taxon_id=41970&quality_grade=research&per_page=30"
+            "&fields=place_guess"
+        )
+        req = urllib.request.Request(
+            inat_url,
+            headers={"Accept": "application/json", "User-Agent": "WildlifeReID/1.0"}
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            import json as _json
+            obs_data = _json.loads(resp.read())
+        seen = set()
+        for obs in obs_data.get("results", []):
+            place = obs.get("place_guess", "")
+            if not place:
+                continue
+            # Take the first segment before any comma (e.g. "Mato Grosso, BR" → "Mato Grosso")
+            segment = place.split(",")[0].strip()
+            # Keep single-word segments that look like proper names (4-14 chars, alpha only)
+            if " " not in segment and segment.isalpha() and segment.isascii() and 4 <= len(segment) <= 14:
+                cap = segment.capitalize()
+                if cap not in seen:
+                    seen.add(cap)
+                    place_names.append((cap, "Place", f"Named after {segment}, a region in jaguar territory"))
+    except Exception as e:
+        print(f"[suggest-names] iNaturalist fetch failed (using fallback): {e}")
+
+    # Build final pool: up to 3 place names + fallback cultural names
+    random.shuffle(place_names)
+    random.shuffle(fallback_names)
+    pool = place_names[:3] + fallback_names
+
     # Select 6 diverse suggestions
     suggestions = []
     used_categories = set()
-    
-    for name, category, description in all_names:
+
+    for name, category, description in pool:
         if len(suggestions) < 6:
-            # Try to diversify categories
             if category not in used_categories or len(suggestions) >= 3:
                 suggestions.append({
                     "name": name,

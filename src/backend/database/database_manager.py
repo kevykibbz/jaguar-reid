@@ -285,7 +285,8 @@ class JaguarDatabase:
                 self.conn.commit()
                 return True, best_match, best_similarity
             
-            return False, None, best_similarity
+            # Return best_match so callers can show which individual was closest
+            return False, best_match, best_similarity
             
         except Exception as e:
             logger.error(f"Error finding match: {e}")
@@ -344,9 +345,11 @@ class JaguarDatabase:
         cursor.execute("""
             SELECT 
                 j.id, j.name, j.first_seen, j.last_seen, j.times_seen,
-                i.image_url, i.local_path, i.storage_type, i.file_name
+                i.image_url, i.local_path, i.storage_type, i.file_name,
+                im.location_name, im.camera_trap_id, im.photographer
             FROM jaguars j
             LEFT JOIN images i ON j.id = i.jaguar_id
+            LEFT JOIN image_metadata im ON i.id = im.image_id
             ORDER BY j.created_at DESC
         """)
         
@@ -360,8 +363,11 @@ class JaguarDatabase:
                     'first_seen': row['first_seen'],
                     'last_seen': row['last_seen'],
                     'times_seen': row['times_seen'],
-                    'image_url': None,  # Will be set to first image URL
-                    'file_name': None,  # Will be set to first file name
+                    'image_url': None,
+                    'file_name': None,
+                    'location_name': None,
+                    'camera_trap_id': None,
+                    'photographer': None,
                     'images': []
                 }
             
@@ -378,6 +384,13 @@ class JaguarDatabase:
                     jaguars[jag_id]['image_url'] = row['image_url']
                 if jaguars[jag_id]['file_name'] is None and row['file_name']:
                     jaguars[jag_id]['file_name'] = row['file_name']
+                # Set metadata fields from first image that has them
+                if jaguars[jag_id]['location_name'] is None and row['location_name']:
+                    jaguars[jag_id]['location_name'] = row['location_name']
+                if jaguars[jag_id]['camera_trap_id'] is None and row['camera_trap_id']:
+                    jaguars[jag_id]['camera_trap_id'] = row['camera_trap_id']
+                if jaguars[jag_id]['photographer'] is None and row['photographer']:
+                    jaguars[jag_id]['photographer'] = row['photographer']
         
         return list(jaguars.values())
     

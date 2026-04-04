@@ -4,6 +4,7 @@ import {
   Settings,
   Sparkles,
   Images,
+  Cat,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -66,6 +67,17 @@ export function AppSidebar() {
                   <Link to="/gallery">
                     <Images className="h-4 w-4" />
                     <span>Gallery & History</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location.pathname === "/individuals"}
+                >
+                  <Link to="/individuals">
+                    <Cat className="h-4 w-4" />
+                    <span>Individuals</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

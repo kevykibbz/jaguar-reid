@@ -11,6 +11,9 @@ import {
   ArrowLeft,
   Clock,
   Loader2,
+  MapPin,
+  User,
+  Tag,
 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -83,7 +86,7 @@ const ImageDetailPage = () => {
       }
 
       setImageDetail({
-        id: data.id + "-image-0", // Generate image ID
+        id: data.id + "-image-0",
         jaguar_id: data.id,
         jaguar_name: data.name,
         image_url: imageUrl,
@@ -91,7 +94,11 @@ const ImageDetailPage = () => {
         times_seen: data.times_seen,
         first_seen: data.first_seen,
         last_seen: data.last_seen,
-        metadata: {},
+        metadata: {
+          location_name: data.location_name ?? undefined,
+          camera_trap_id: data.camera_trap_id ?? undefined,
+          photographer: data.photographer ?? undefined,
+        },
       });
 
       // Load like count from database
@@ -499,6 +506,57 @@ const ImageDetailPage = () => {
                 </CardContent>
               </Card>
             </motion.div>
+
+            {/* Field Data */}
+            {(imageDetail.metadata?.location_name ||
+              imageDetail.metadata?.camera_trap_id ||
+              imageDetail.metadata?.photographer) && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35 }}
+              >
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      <Tag className="h-4 w-4 text-emerald-500" />
+                      Field Data
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                      {imageDetail.metadata?.location_name && (
+                        <div className="flex items-start gap-2">
+                          <MapPin className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-xs text-muted-foreground">Location</p>
+                            <p className="font-medium">{imageDetail.metadata.location_name}</p>
+                          </div>
+                        </div>
+                      )}
+                      {imageDetail.metadata?.camera_trap_id && (
+                        <div className="flex items-start gap-2">
+                          <Camera className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-xs text-muted-foreground">Camera Trap</p>
+                            <p className="font-medium">{imageDetail.metadata.camera_trap_id}</p>
+                          </div>
+                        </div>
+                      )}
+                      {imageDetail.metadata?.photographer && (
+                        <div className="flex items-start gap-2">
+                          <User className="h-4 w-4 text-purple-500 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-xs text-muted-foreground">Photographer</p>
+                            <p className="font-medium">{imageDetail.metadata.photographer}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
 
             {/* Comments Section */}
             <motion.div

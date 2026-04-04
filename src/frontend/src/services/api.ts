@@ -62,6 +62,9 @@ export interface JaguarImage {
   times_seen: number;
   image_url?: string | null;
   file_name?: string | null;
+  location_name?: string | null;
+  camera_trap_id?: string | null;
+  photographer?: string | null;
   images?: Array<{
     url: string;
     path: string | null;
@@ -254,6 +257,8 @@ export async function identifyJaguar(
   similarity: number;
   species?: string;
   all_scores?: Record<string, number>;
+  closest_jaguar_name?: string | null;
+  closest_jaguar_id?: string | null;
 }> {
   const formData = new FormData();
 
@@ -304,10 +309,12 @@ export async function identifyJaguar(
     match: data.stage3?.match || false,
     species: species,
     confidence: confidence,
-    similarity: data.stage3?.similarity || confidence,
+    similarity: data.stage3?.similarity ?? 0,
     all_scores: data.stage2?.all_scores,
     jaguar_id: data.jaguar_id || data.stage3?.jaguar_id,
     jaguar_name: data.jaguar_name || data.stage3?.jaguar_name,
+    closest_jaguar_name: data.stage3?.closest_jaguar_name ?? null,
+    closest_jaguar_id: data.stage3?.closest_jaguar_id ?? null,
   };
 }
 
