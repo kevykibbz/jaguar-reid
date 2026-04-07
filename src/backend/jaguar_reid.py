@@ -79,10 +79,14 @@ def load_jaguar_reid_model(model_path, embedding_size=512, device='cpu'):
     print(f"Loading Jaguar Re-ID model from {model_path}...")
     
     model = JaguarReIDModel(embedding_size=embedding_size, pretrained=False)
-    
+
+    # Materialize meta tensors if any (newer PyTorch/torchvision versions)
+    if any(p.is_meta for p in model.parameters()):
+        model = model.to_empty(device='cpu')
+
     try:
-        # Load state dict directly
-        state_dict = torch.load(model_path, map_location=device, weights_only=False)
+        # Always load to CPU first, move to target device after
+        state_dict = torch.load(model_path, map_location='cpu', weights_only=False)
         
         # If it's a checkpoint dict with metadata, extract state_dict
         if isinstance(state_dict, dict) and 'model_state_dict' in state_dict:
@@ -90,7 +94,7 @@ def load_jaguar_reid_model(model_path, embedding_size=512, device='cpu'):
         elif isinstance(state_dict, dict) and 'state_dict' in state_dict:
             state_dict = state_dict['state_dict']
         
-        model.load_state_dict(state_dict)
+        model.load_state_dict(state_dict, assign=True)
         print("✓ Loaded Re-ID model weights successfully")
             
     except Exception as e:

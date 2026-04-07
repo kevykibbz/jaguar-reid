@@ -61,45 +61,22 @@ stage3_model = None
 db = None
 azure_storage = None
 models_loaded = False
+db_initialized = False
 
-def ensure_models_loaded():
-    """Lazy load models on first request"""
-    global animal_filter, stage1_model, stage2_model, stage3_model, db, azure_storage, models_loaded
-    
-    if models_loaded:
+def ensure_db_initialized():
+    """Lazy initialize only the database and Azure storage — no ML models."""
+    global db, azure_storage, db_initialized
+
+    if db_initialized:
         return
-    
-    print("\n" + "="*70)
-    print("LOADING MODELS (First Request - This may take a few minutes on CPU)")
-    print("="*70)
-    
-    # Initialize Stage 0 (Animal Filter)
-    print("Loading Stage 0 (Animal vs Non-Animal Filter)...")
-    animal_filter = AnimalFilter(device='cpu')
-    animal_filter.initialize()
-    print("[OK] Stage 0 model loaded on cpu")
-    
-    print("Loading Stage 1 (BigCat Filter)...")
-    stage1_model = load_stage1_model()
-    print("[OK] Stage 1 model loaded")
-    
-    print("Loading Stage 2 (Species Classifier)...")
-    stage2_model = load_stage2_model()
-    print("[OK] Stage 2 model loaded")
-    
-    print("Loading Stage 3 (Jaguar Re-ID)...")
-    stage3_model = load_stage3_model()
-    print("[OK] Stage 3 model loaded")
-    
-    # Initialize database
+
     try:
         db = get_database()
         print("[OK] Database initialized")
     except Exception as e:
         print(f"[WARNING] Database initialization failed: {e}")
         db = None
-    
-    # Initialize Azure Storage
+
     try:
         azure_storage = AzureStorageManager()
         if azure_storage.is_available():
@@ -109,7 +86,42 @@ def ensure_models_loaded():
     except Exception as e:
         print(f"[WARNING] Azure Storage initialization failed: {e}")
         azure_storage = None
-    
+
+    db_initialized = True
+
+
+def ensure_models_loaded():
+    """Lazy load models on first request"""
+    global animal_filter, stage1_model, stage2_model, stage3_model, models_loaded
+
+    if models_loaded:
+        return
+
+    # Ensure DB is up first
+    ensure_db_initialized()
+
+    print("\n" + "="*70)
+    print("LOADING MODELS (First Request - This may take a few minutes on CPU)")
+    print("="*70)
+
+    # Initialize Stage 0 (Animal Filter)
+    print("Loading Stage 0 (Animal vs Non-Animal Filter)...")
+    animal_filter = AnimalFilter(device='cpu')
+    animal_filter.initialize()
+    print("[OK] Stage 0 model loaded on cpu")
+
+    print("Loading Stage 1 (BigCat Filter)...")
+    stage1_model = load_stage1_model()
+    print("[OK] Stage 1 model loaded")
+
+    print("Loading Stage 2 (Species Classifier)...")
+    stage2_model = load_stage2_model()
+    print("[OK] Stage 2 model loaded")
+
+    print("Loading Stage 3 (Jaguar Re-ID)...")
+    stage3_model = load_stage3_model()
+    print("[OK] Stage 3 model loaded")
+
     models_loaded = True
     print("\n" + "="*70)
     print("ALL MODELS LOADED - SYSTEM READY!")
@@ -158,7 +170,7 @@ def get_jaguars(
         search: Search query for jaguar names
         exclude_id: Exclude a specific jaguar ID from results
     """
-    ensure_models_loaded()
+    ensure_db_initialized()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
     
@@ -218,7 +230,7 @@ def get_jaguar_by_id(jaguar_id: str):
     Returns:
         JSON with jaguar details including images, sightings, and metadata
     """
-    ensure_models_loaded()
+    ensure_db_initialized()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
     
@@ -248,7 +260,7 @@ def get_jaguar_comments(jaguar_id: str):
     Returns:
         JSON with list of comments (currently returns empty array as comments not implemented in DB)
     """
-    ensure_models_loaded()
+    ensure_db_initialized()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
     
@@ -280,7 +292,7 @@ def get_jaguar_likes(jaguar_id: str):
     Returns:
         JSON with like count and whether current user has liked
     """
-    ensure_models_loaded()
+    ensure_db_initialized()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
     
@@ -315,7 +327,7 @@ def toggle_jaguar_like(jaguar_id: str):
     Returns:
         JSON with updated like count and user like status
     """
-    ensure_models_loaded()
+    ensure_db_initialized()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
     
@@ -342,7 +354,7 @@ def toggle_jaguar_like(jaguar_id: str):
 @app.get("/recent-activity")
 def get_recent_activity(limit: int = 20):
     """Get recent activity feed (registrations and sightings)"""
-    ensure_models_loaded()
+    ensure_db_initialized()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
     
@@ -360,7 +372,7 @@ def get_recent_activity(limit: int = 20):
 @app.get("/statistics")
 def get_statistics():
     """Get database statistics"""
-    ensure_models_loaded()
+    ensure_db_initialized()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
     

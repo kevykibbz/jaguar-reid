@@ -38,18 +38,23 @@ def load_stage1_model():
     # Replace classifier for binary output
     num_features = 1408  # EfficientNet-B2 feature dimension
     model.classifier = nn.Linear(num_features, 2)
-    
+
+    # Newer timm versions may initialize models on meta device to save memory.
+    # Materialize to CPU before loading weights so load_state_dict works.
+    if any(p.is_meta for p in model.parameters()):
+        model = model.to_empty(device='cpu')
+
     try:
-        checkpoint = torch.load(STAGE1_MODEL_PATH, map_location=DEVICE, weights_only=False)
+        checkpoint = torch.load(STAGE1_MODEL_PATH, map_location='cpu', weights_only=False)
         if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-            model.load_state_dict(checkpoint['model_state_dict'])
+            model.load_state_dict(checkpoint['model_state_dict'], assign=True)
         else:
-            model.load_state_dict(checkpoint)
+            model.load_state_dict(checkpoint, assign=True)
         print("[OK] Stage 1 weights loaded successfully")
     except Exception as e:
         print(f"[WARNING] Could not load Stage 1 weights: {e}")
         print("  Using randomly initialized model")
-    
+
     model.to(DEVICE)
     model.eval()
     print(f"[OK] Stage 1 model loaded on {DEVICE}")
@@ -68,18 +73,22 @@ def load_stage2_model():
     # Replace classifier for multi-class species output
     num_features = 1408  # EfficientNet-B2 feature dimension
     model.classifier = nn.Linear(num_features, NUM_STAGE2_CLASSES)
-    
+
+    # Materialize meta tensors if timm used meta device init
+    if any(p.is_meta for p in model.parameters()):
+        model = model.to_empty(device='cpu')
+
     try:
-        checkpoint = torch.load(STAGE2_MODEL_PATH, map_location=DEVICE, weights_only=False)
+        checkpoint = torch.load(STAGE2_MODEL_PATH, map_location='cpu', weights_only=False)
         if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-            model.load_state_dict(checkpoint['model_state_dict'])
+            model.load_state_dict(checkpoint['model_state_dict'], assign=True)
         else:
-            model.load_state_dict(checkpoint)
+            model.load_state_dict(checkpoint, assign=True)
         print("[OK] Stage 2 weights loaded successfully")
     except Exception as e:
         print(f"[WARNING] Could not load Stage 2 weights: {e}")
         print("  Using randomly initialized model")
-    
+
     model.to(DEVICE)
     model.eval()
     print(f"[OK] Stage 2 model loaded on {DEVICE}")
