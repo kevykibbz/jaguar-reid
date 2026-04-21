@@ -10,15 +10,24 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Sparkles, Upload, Plus, AlertCircle, X } from "lucide-react";
+import { Sparkles, Upload, Plus, AlertCircle, X, Link2 } from "lucide-react";
 import {
   identifyJaguar,
   registerNewJaguar,
   suggestNames,
+  linkToExistingJaguar,
 } from "@/services/api";
+
+interface TopMatch {
+  id: string;
+  name: string;
+  similarity: number;
+  times_seen: number;
+  image_url: string | null;
+  has_image: boolean;
+}
 
 interface MatchResult {
   match: boolean;
@@ -30,6 +39,7 @@ interface MatchResult {
   all_scores?: Record<string, number>;
   closest_jaguar_name?: string | null;
   closest_jaguar_id?: string | null;
+  top_matches?: TopMatch[];
 }
 
 const JaguarReIdPage = () => {
@@ -223,6 +233,51 @@ const JaguarReIdPage = () => {
     }
   };
 
+  const handleLinkToExisting = async (jaguarId: string, jaguarName: string) => {
+    setLoading(true);
+    setErrorMessage("");
+
+    try {
+      // If user provided a URL, download it in the browser first
+      let fileToSend = image;
+      if (!fileToSend && imageUrl.trim()) {
+        try {
+          fileToSend = await downloadImageFromUrl(imageUrl.trim());
+        } catch (error) {
+          throw new Error(`Failed to download image: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      const data = await linkToExistingJaguar(
+        fileToSend,
+        jaguarId,
+        undefined,
+      );
+
+      setShowNamingDialog(false);
+      setShowResults(true);
+      setMatchResult({
+        match: true, // Show as match since user manually linked it
+        jaguar_id: data.jaguar_id,
+        jaguar_name: jaguarName,
+        confidence: matchResult?.confidence ?? 1.0,
+        similarity: matchResult?.similarity ?? 0.65, // Use the similarity from identification
+      });
+    } catch (error) {
+      console.error(error);
+      const errorMsg =
+        error instanceof Error ? error.message : "Failed to link to jaguar.";
+      setErrorMessage(errorMsg);
+
+      // Close naming dialog so error dialog is visible
+      setShowNamingDialog(false);
+      setErrorDialogMessage(errorMsg);
+      setShowErrorDialog(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
       {/* Header */}
@@ -339,7 +394,7 @@ const JaguarReIdPage = () => {
 
         {/* Naming Dialog for New Jaguars */}
         <Dialog open={showNamingDialog} onOpenChange={setShowNamingDialog}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="max-w-5xl max-h-[85vh]">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Plus className="h-5 w-5" />
@@ -360,77 +415,164 @@ const JaguarReIdPage = () => {
                   </span>
                 )}
                 <span className="block mt-2">
-                  Give this new individual a name to register them.
+                  You can either register this as a new jaguar, or link it to an existing one.
                 </span>
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Jaguar Name</label>
-                <Input
-                  placeholder="e.g., Luna, Shadow, Spot..."
-                  value={newJaguarName}
-                  onChange={(e) => setNewJaguarName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSaveNewJaguar()}
-                  disabled={loading}
-                />
-              </div>
 
-              {/* AI Name Suggestions */}
-              {loadingSuggestions ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                  <span>Generating AI suggestions...</span>
-                </div>
-              ) : (
-                suggestedNames.length > 0 && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-purple-500" />
-                      AI Name Suggestions
-                    </label>
-                    <p className="text-xs text-muted-foreground">
-                      These are suggested <strong>names for this new individual</strong> — not jaguars already in the database.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {suggestedNames.map((suggestion, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => setNewJaguarName(suggestion.name)}
-                          className="px-3 py-2 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-lg transition-colors group"
-                          title={suggestion.description}
-                        >
-                          <div className="text-sm font-medium text-purple-700 dark:text-purple-300">
-                            {suggestion.name}
-                          </div>
-                          <div className="text-xs text-purple-600 dark:text-purple-400">
-                            {suggestion.category}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Click a suggestion to use it
-                    </p>
+            {/* Two-Column Layout: Top Matches Left, Form Right */}
+            <div className="grid md:grid-cols-[300px_1fr] gap-6">
+              {/* LEFT: Top Matches Section with Vertical Scroll */}
+              {matchResult?.top_matches && matchResult.top_matches.length > 0 && (
+                <div className="border-r pr-6 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Link2 className="h-4 w-4 text-blue-500" />
+                    <h4 className="text-sm font-semibold">Top Matches</h4>
                   </div>
-                )
+                  <p className="text-xs text-muted-foreground">
+                    Click to link to existing
+                  </p>
+                  
+                  {/* Vertical Scrollable Matches */}
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+                    {loading ? (
+                      // Loading skeletons
+                      [...Array(3)].map((_, idx) => (
+                        <div
+                          key={idx}
+                          className="flex gap-3 p-3 rounded-lg border border-border animate-pulse"
+                        >
+                          <div className="w-20 h-20 bg-muted rounded-md flex-shrink-0"></div>
+                          <div className="flex-1 space-y-2">
+                            <div className="h-4 bg-muted rounded w-3/4"></div>
+                            <div className="h-3 bg-muted rounded w-1/2"></div>
+                            <div className="h-3 bg-muted rounded w-1/2"></div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      matchResult.top_matches.map((match) => (
+                        <button
+                          key={match.id}
+                          onClick={() => handleLinkToExisting(match.id, match.name)}
+                          disabled={loading}
+                          className="w-full flex gap-3 p-3 rounded-lg border border-border hover:bg-accent/50 hover:border-blue-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed text-left"
+                        >
+                          {match.image_url ? (
+                            <img
+                              src={match.image_url}
+                              alt={match.name}
+                              className="w-20 h-20 object-cover rounded-md flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="w-20 h-20 bg-muted rounded-md flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs text-muted-foreground text-center">No image</span>
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate" title={match.name}>{match.name}</div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {(match.similarity * 100).toFixed(1)}% match
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              Seen {match.times_seen}×
+                            </div>
+                            {!match.has_image && (
+                              <div className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                                ⚠️ No ref img
+                              </div>
+                            )}
+                          </div>
+                          <Link2 className="h-4 w-4 text-muted-foreground group-hover:text-blue-500 transition-colors flex-shrink-0 mt-1" />
+                        </button>
+                      ))
+                    )}
+                  </div>
+                  
+                  {!loading && matchResult.top_matches.length > 0 && (
+                    <p className="text-xs text-muted-foreground text-center pt-2 border-t">
+                      {matchResult.top_matches.length} matches found
+                    </p>
+                  )}
+                </div>
               )}
+
+              {/* RIGHT: New Jaguar Form */}
+              <div className="flex flex-col min-h-[400px]">
+                {/* Form Content - Scrollable */}
+                <div className="flex-1 space-y-4 overflow-y-auto pr-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Jaguar Name</label>
+                    <Input
+                      placeholder="e.g., Luna, Shadow, Spot..."
+                      value={newJaguarName}
+                      onChange={(e) => setNewJaguarName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSaveNewJaguar()}
+                      disabled={loading}
+                    />
+                  </div>
+
+                  {/* AI Name Suggestions */}
+                  {loadingSuggestions ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      <span>Generating AI suggestions...</span>
+                    </div>
+                  ) : (
+                    suggestedNames.length > 0 && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-purple-500" />
+                          AI Name Suggestions
+                        </label>
+                        <p className="text-xs text-muted-foreground">
+                          These are suggested <strong>names for this new individual</strong> — not jaguars already in the database.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {suggestedNames.map((suggestion, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => setNewJaguarName(suggestion.name)}
+                              className="px-3 py-2 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-lg transition-colors group"
+                              title={suggestion.description}
+                            >
+                              <div className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                                {suggestion.name}
+                              </div>
+                              <div className="text-xs text-purple-600 dark:text-purple-400">
+                                {suggestion.category}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Click a suggestion to use it
+                        </p>
+                      </div>
+                    )
+                  )}
+                </div>
+
+                {/* Action Buttons - Fixed at Bottom */}
+                <div className="flex items-center gap-3 pt-4 mt-4 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowNamingDialog(false)}
+                    disabled={loading}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSaveNewJaguar}
+                    disabled={loading || !newJaguarName.trim()}
+                    className="flex-1"
+                  >
+                    {loading ? "Saving..." : "Save Jaguar"}
+                  </Button>
+                </div>
+              </div>
             </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowNamingDialog(false)}
-                disabled={loading}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSaveNewJaguar}
-                disabled={loading || !newJaguarName.trim()}
-              >
-                {loading ? "Saving..." : "Save Jaguar"}
-              </Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
 

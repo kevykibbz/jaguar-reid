@@ -259,6 +259,14 @@ export async function identifyJaguar(
   all_scores?: Record<string, number>;
   closest_jaguar_name?: string | null;
   closest_jaguar_id?: string | null;
+  top_matches?: Array<{
+    id: string;
+    name: string;
+    similarity: number;
+    times_seen: number;
+    image_url: string | null;
+    has_image: boolean;
+  }>;
 }> {
   const formData = new FormData();
 
@@ -315,6 +323,7 @@ export async function identifyJaguar(
     jaguar_name: data.jaguar_name || data.stage3?.jaguar_name,
     closest_jaguar_name: data.stage3?.closest_jaguar_name ?? null,
     closest_jaguar_id: data.stage3?.closest_jaguar_id ?? null,
+    top_matches: data.stage3?.top_matches ?? [],
   };
 }
 
@@ -481,6 +490,31 @@ export async function toggleJaguarLike(
   formData.append("user_id", userId);
 
   const response = await apiClient.post(`/jaguar/${jaguarId}/likes`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+  return response.data;
+}
+
+/**
+ * Link an image to an existing jaguar (manual matching)
+ */
+export async function linkToExistingJaguar(
+  file: File | null,
+  jaguarId: string,
+  imageUrl?: string,
+): Promise<{ success: boolean; message: string; jaguar_id?: string; jaguar_name?: string }> {
+  const formData = new FormData();
+
+  if (file) {
+    formData.append("file", file);
+  }
+  if (imageUrl) {
+    formData.append("image_url", imageUrl);
+  }
+  formData.append("jaguar_id", jaguarId);
+
+  const response = await apiClient.post("/link-to-existing", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
 

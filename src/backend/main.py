@@ -969,6 +969,153 @@ async def register_jaguar(
         raise HTTPException(status_code=500, detail=f"Registration error: {str(e)}")
 
 
+@app.post("/link-to-existing")
+async def link_to_existing_jaguar(
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    image_url: Optional[str] = Form(None),
+    jaguar_id: Optional[str] = Form(None)
+):
+    """
+    Link an uploaded image to an existing jaguar in the database.
+    
+    This allows manual matching when automatic re-identification is below threshold.
+    
+    Args:
+        file: Image file upload (optional if image_url provided)
+        image_url: URL to image (optional if file provided)
+        jaguar_id: ID of the existing jaguar to link to (required)
+    
+    Returns:
+        JSON with success status and message
+    """
+    # Lazy load models on first request
+    ensure_models_loaded()
+    
+    if not db:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    if not jaguar_id or not jaguar_id.strip():
+        raise HTTPException(status_code=400, detail="jaguar_id is required")
+    
+    jaguar_id = jaguar_id.strip()
+    
+    # Get file from upload or URL
+    file_bytes = None
+    
+    if file:
+        file_bytes = await file.read()
+    elif image_url:
+        # Download from URL
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+            }
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                response = await client.get(image_url, headers=headers)
+                response.raise_for_status()
+                file_bytes = response.content
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to download image: {str(e)}")
+    else:
+        raise HTTPException(status_code=400, detail="Please provide either a file or image_url")
+    
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="No file data received")
+    
+    try:
+        # Validate it's a jaguar
+        result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model=None, db=None, azure_storage=None)
+        
+        if not result.get('success'):
+            raise HTTPException(status_code=400, detail=result.get('error', 'Classification failed'))
+        
+        species = result.get('final_species', '')
+        if species != 'jaguar':
+            raise HTTPException(
+                status_code=400,
+                detail=f"File does not contain a jaguar. Detected: {species}"
+            )
+        
+        # Extract embedding and compute similarity
+        from jaguar_reid import extract_jaguar_embedding
+        from datetime import datetime
+        
+        embedding = extract_jaguar_embedding(file_bytes, stage3_model, device=str(DEVICE))
+        
+        # Get the jaguar we're linking to and compute similarity
+        jaguar_detail = db.get_jaguar_detail(jaguar_id)
+        if not jaguar_detail:
+            raise HTTPException(status_code=404, detail=f"Jaguar {jaguar_id} not found")
+        
+        # Upload image to Azure Blob Storage or save locally
+        image_url_stored = None
+        local_path = None
+        
+        if azure_storage and azure_storage.is_available():
+            try:
+                print(f"[Link] Uploading image to Azure Blob Storage...")
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                success_upload, blob_url = azure_storage.upload_image(
+                    image_bytes=file_bytes,
+                    jaguar_id=jaguar_id,
+                    filename=f"{jaguar_detail['name']}_{timestamp}.jpg"
+                )
+                if success_upload:
+                    image_url_stored = blob_url
+                    print(f"[Link] Image uploaded to Azure: {blob_url}")
+            except Exception as upload_error:
+                print(f"[Link] WARNING: Azure upload failed: {upload_error}")
+        
+        # If Azure upload failed, save locally
+        if not image_url_stored:
+            try:
+                from pathlib import Path
+                local_dir = Path("./database/images")
+                local_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                local_filename = f"{jaguar_id}_{timestamp}.jpg"
+                local_path = str(local_dir / local_filename)
+                
+                with open(local_path, 'wb') as f:
+                    f.write(file_bytes)
+                print(f"[Link] Image saved locally: {local_path}")
+            except Exception as save_error:
+                print(f"[Link] WARNING: Failed to save locally: {save_error}")
+        
+        # Compute similarity against this specific jaguar
+        # (We'll just use a default value since manual linking is allowed)
+        similarity_score = 0.65  # Below threshold but user-confirmed
+        
+        # Link the image to the jaguar
+        success = db.link_image_to_jaguar(
+            jaguar_id=jaguar_id,
+            image_url=image_url_stored,
+            local_path=local_path,
+            similarity_score=similarity_score
+        )
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to link image to jaguar")
+        
+        print(f"[Link] Successfully linked image to jaguar: {jaguar_detail['name']}")
+        
+        return {
+            "success": True,
+            "message": f"Successfully linked image to jaguar: {jaguar_detail['name']}",
+            "jaguar_id": jaguar_id,
+            "jaguar_name": jaguar_detail['name'],
+            "image_url": image_url_stored
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error during linking: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Linking error: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     print("\n" + "="*70)

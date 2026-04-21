@@ -507,6 +507,7 @@ def classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage
     # Stage 3: Jaguar Individual Re-Identification (if jaguar detected)
     stage3_result = None
     jaguar_info = None
+    top_matches = []
     
     if stage2_result['species'] == 'jaguar' and stage3_model is not None and db is not None:
         print("\n[Stage 3] Jaguar detected! Running individual re-identification...")
@@ -520,6 +521,12 @@ def classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage
             # Extract jaguar facial embedding
             embedding = extract_jaguar_embedding(image_bytes, stage3_model, device=str(DEVICE))
             print(f"[Stage 3] Extracted embedding (size: {len(embedding)})")
+            
+            # Get top 5 matching jaguars
+            top_matches = db.get_top_matches(embedding.tolist(), top_n=5)
+            print(f"[Stage 3] Found {len(top_matches)} potential matches")
+            for i, match in enumerate(top_matches[:3], 1):
+                print(f"  {i}. {match['name']}: {match['similarity']:.2%}")
             
             # Search for matching jaguar in database
             match_found, matched_jaguar, similarity = db.find_matching_jaguar(
@@ -535,7 +542,8 @@ def classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage
                     'jaguar_id': matched_jaguar['id'],
                     'jaguar_name': matched_jaguar['name'],
                     'similarity': float(similarity),
-                    'status': 'known'
+                    'status': 'known',
+                    'top_matches': top_matches
                 }
                 jaguar_info = matched_jaguar
                 
@@ -548,6 +556,7 @@ def classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage
                     'status': 'new',
                     'closest_jaguar_name': matched_jaguar['name'] if matched_jaguar else None,
                     'closest_jaguar_id': matched_jaguar['id'] if matched_jaguar else None,
+                    'top_matches': top_matches
                 }
                     
         except Exception as e:

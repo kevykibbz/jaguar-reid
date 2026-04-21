@@ -160,3 +160,5 @@ AZURE_DEPLOYMENT.md
 PRODUCTION_CLEANUP.md
 src/backend/sync_image_urls.py
 src\backend\notebook
+
+inspect_production_db.py

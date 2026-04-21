@@ -185,6 +185,125 @@ class JaguarDatabaseORM:
         finally:
             session.close()
     
+    def get_top_matches(
+        self,
+        query_embedding: List[float],
+        top_n: int = 5
+    ) -> List[Dict]:
+        """Get top N most similar jaguars ranked by similarity.
+        
+        Args:
+            query_embedding: Embedding vector to match against
+            top_n: Number of top matches to return
+            
+        Returns:
+            List of dicts with jaguar info and similarity scores, sorted by similarity desc
+        """
+        session = self.get_session()
+        try:
+            jaguars = session.query(Jaguar).all()
+            
+            # Convert list to tensor if needed
+            if isinstance(query_embedding, list):
+                query_embedding = torch.tensor(query_embedding, dtype=torch.float32)
+            
+            query_embedding = query_embedding.cpu()
+            
+            # Compute similarity for all jaguars
+            matches = []
+            for jaguar in jaguars:
+                # Convert bytes back to tensor
+                stored_embedding = torch.frombuffer(jaguar.embedding, dtype=torch.float32)
+                
+                # Compute cosine similarity
+                similarity = torch.nn.functional.cosine_similarity(
+                    query_embedding.unsqueeze(0),
+                    stored_embedding.unsqueeze(0)
+                ).item()
+                
+                # Get first image
+                first_image = session.query(Image).filter(
+                    Image.jaguar_id == jaguar.id
+                ).order_by(desc(Image.created_at)).first()
+                
+                matches.append({
+                    'id': jaguar.id,
+                    'name': jaguar.name,
+                    'similarity': similarity,
+                    'times_seen': jaguar.times_seen,
+                    'image_url': first_image.image_url if first_image else None,
+                    'has_image': first_image is not None
+                })
+            
+            # Sort by similarity descending
+            matches.sort(key=lambda x: x['similarity'], reverse=True)
+            
+            # Return top N
+            return matches[:top_n]
+            
+        except Exception as e:
+            logger.error(f"Error getting top matches: {e}")
+            return []
+        finally:
+            session.close()
+    
+    def link_image_to_jaguar(
+        self,
+        jaguar_id: str,
+        image_url: Optional[str] = None,
+        local_path: Optional[str] = None,
+        similarity_score: float = 0.0
+    ) -> bool:
+        """Link an image to an existing jaguar (manual matching).
+        
+        Args:
+            jaguar_id: ID of the jaguar to link to
+            image_url: Azure blob URL (if available)
+            local_path: Local file path (if available)
+            similarity_score: Similarity score for this match
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        session = self.get_session()
+        try:
+            # Check if jaguar exists
+            jaguar = session.query(Jaguar).filter(Jaguar.id == jaguar_id).first()
+            if not jaguar:
+                logger.error(f"Jaguar {jaguar_id} not found")
+                return False
+            
+            # Create image record
+            new_image = Image(
+                jaguar_id=jaguar_id,
+                image_url=image_url,
+                local_path=local_path,
+                storage_type='azure' if image_url else 'local'
+            )
+            session.add(new_image)
+            
+            # Record sighting
+            sighting = Sighting(
+                jaguar_id=jaguar_id,
+                similarity_score=similarity_score
+            )
+            session.add(sighting)
+            
+            # Update jaguar metadata
+            jaguar.last_seen = datetime.utcnow()
+            jaguar.times_seen += 1
+            
+            session.commit()
+            logger.info(f"Successfully linked image to jaguar: {jaguar.name}")
+            return True
+            
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Failed to link image to jaguar: {e}")
+            return False
+        finally:
+            session.close()
+    
     def list_jaguars(self) -> List[Dict]:
         """List all jaguars with their first image, sorted by creation date (newest first)."""
         session = self.get_session()

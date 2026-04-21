@@ -33,32 +33,32 @@ const ResultsDisplay = ({
   const { match, jaguar_id, jaguar_name, confidence, similarity, species, all_scores } = matchResult;
   const percentage = Math.round(confidence * 100);
 
-  const circumference = 2 * Math.PI * 70;
+  const circumference = 2 * Math.PI * 60;
   const offset = circumference - (percentage / 100) * circumference;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl p-0 overflow-hidden">
+      <DialogContent className="max-w-3xl p-0 overflow-hidden">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, type: "spring" }}
           className="w-full"
         >
-          <div className="bg-card p-8">
-            <DialogHeader className="mb-8">
-              <DialogTitle className="text-3xl font-bold text-center">
+          <div className="bg-card p-6">
+            <DialogHeader className="mb-6">
+              <DialogTitle className="text-2xl font-bold text-center">
                 {match ? "Match Found!" : "New Jaguar Registered"}
               </DialogTitle>
-              <DialogDescription className="text-center text-base">
+              <DialogDescription className="text-center text-sm">
                 {match
                   ? "This jaguar matches an existing individual in our database"
                   : "Successfully registered as a new jaguar identity"}
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid md:grid-cols-2 gap-8 items-center">
-              {/* Circular Progress */}
+            <div className="grid md:grid-cols-[auto_1fr] gap-6 items-start">
+              {/* Circular Progress - Smaller */}
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -66,24 +66,24 @@ const ResultsDisplay = ({
                 className="flex justify-center"
               >
                 <div className="relative">
-                  <svg className="w-56 h-56 transform -rotate-90">
+                  <svg className="w-40 h-40 transform -rotate-90">
                     {/* Background circle */}
                     <circle
-                      cx="112"
-                      cy="112"
-                      r="70"
+                      cx="80"
+                      cy="80"
+                      r="60"
                       stroke="currentColor"
-                      strokeWidth="12"
+                      strokeWidth="10"
                       fill="none"
                       className="text-muted/20"
                     />
                     {/* Progress circle */}
                     <motion.circle
-                      cx="112"
-                      cy="112"
-                      r="70"
+                      cx="80"
+                      cy="80"
+                      r="60"
                       stroke="currentColor"
-                      strokeWidth="12"
+                      strokeWidth="10"
                       fill="none"
                       strokeLinecap="round"
                       initial={{ strokeDashoffset: circumference }}
@@ -100,11 +100,11 @@ const ResultsDisplay = ({
                       transition={{ delay: 0.5 }}
                       className="text-center"
                     >
-                      <div className="text-5xl font-bold mb-1">
+                      <div className="text-3xl font-bold mb-1">
                         {match ? `${Math.round(similarity * 100)}%` : `${percentage}%`}
                       </div>
-                      <div className="text-sm text-muted-foreground">
-                        {match ? "Identity Match" : "Species Confidence"}
+                      <div className="text-xs text-muted-foreground">
+                        {match ? "Match" : "Confidence"}
                       </div>
                     </motion.div>
                   </div>
@@ -116,12 +116,12 @@ const ResultsDisplay = ({
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.4 }}
-                className="space-y-6"
+                className="space-y-4"
               >
                 {/* Verdict */}
                 <div
                   className={cn(
-                    "flex items-center gap-3 p-4 rounded-2xl border-2",
+                    "flex items-center gap-3 p-3 rounded-xl border-2",
                     match
                       ? "bg-green-500/10 border-green-500/50"
                       : "bg-blue-500/10 border-blue-500/50",
@@ -129,56 +129,47 @@ const ResultsDisplay = ({
                 >
                   {match ? (
                     <>
-                      <CheckCircle2 className="h-8 w-8 text-green-500 shrink-0" />
+                      <CheckCircle2 className="h-6 w-6 text-green-500 shrink-0" />
                       <div>
-                        <h4 className="font-bold text-lg">Known Jaguar</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Matched: {jaguar_name || `ID: ${jaguar_id}`}
+                        <h4 className="font-bold text-base">Known Jaguar</h4>
+                        <p className="text-xs text-muted-foreground">
+                          {jaguar_name || `ID: ${jaguar_id}`}
                         </p>
                       </div>
                     </>
                   ) : (
                     <>
-                      <User className="h-8 w-8 text-blue-500 shrink-0" />
+                      <User className="h-6 w-6 text-blue-500 shrink-0" />
                       <div>
-                        <h4 className="font-bold text-lg">New Identity</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Registered as: {jaguar_name}
+                        <h4 className="font-bold text-base">New Identity</h4>
+                        <p className="text-xs text-muted-foreground">
+                          {jaguar_name}
                         </p>
                       </div>
                     </>
                   )}
                 </div>
 
-                {/* Species Classification */}
+                {/* Species Classification - Compact */}
                 {species && (
-                  <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 border-2 border-purple-500/30 p-4 rounded-2xl">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Award className="h-5 w-5 text-purple-500" />
-                      <h4 className="font-bold text-sm">Species Classification</h4>
+                  <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 border-2 border-purple-500/30 p-3 rounded-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Award className="h-4 w-4 text-purple-500" />
+                        <h4 className="font-bold text-xs">Species</h4>
+                      </div>
+                      <div className="text-lg font-bold capitalize">{species}</div>
                     </div>
-                    <div className="text-xl font-bold capitalize mb-1">{species}</div>
                     {all_scores && Object.keys(all_scores).length > 0 && (
-                      <div className="mt-3 space-y-1">
-                        <p className="text-xs text-muted-foreground mb-2">All Species Scores:</p>
+                      <div className="grid grid-cols-2 gap-2">
                         {Object.entries(all_scores)
                           .sort(([, a], [, b]) => b - a)
+                          .slice(0, 4)
                           .map(([speciesName, score]) => (
-                            <div key={speciesName} className="flex items-center gap-2">
-                              <div className="flex-1 bg-muted/50 rounded-full h-2 overflow-hidden">
-                                <div
-                                  className={cn(
-                                    "h-full rounded-full transition-all",
-                                    speciesName === species
-                                      ? "bg-purple-500"
-                                      : "bg-muted-foreground/20"
-                                  )}
-                                  style={{ width: `${score * 100}%` }}
-                                />
-                              </div>
-                              <span className="text-xs capitalize w-16">{speciesName}</span>
-                              <span className="text-xs font-mono w-12 text-right">
-                                {(score * 100).toFixed(1)}%
+                            <div key={speciesName} className="flex items-center gap-1 text-xs">
+                              <span className="capitalize truncate flex-1">{speciesName}:</span>
+                              <span className="font-mono font-medium">
+                                {(score * 100).toFixed(0)}%
                               </span>
                             </div>
                           ))}
@@ -187,71 +178,51 @@ const ResultsDisplay = ({
                   </div>
                 )}
 
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-4">
+                {/* Stats - Horizontal */}
+                <div className="grid grid-cols-3 gap-3">
                   {match && (
-                    <div className="bg-secondary/50 p-4 rounded-xl col-span-2">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Database className="h-4 w-4 text-primary" />
-                        <span className="text-sm font-medium">
-                          Jaguar Identity
-                        </span>
+                    <div className="bg-secondary/50 p-3 rounded-lg">
+                      <div className="flex items-center gap-1 mb-1">
+                        <Database className="h-3 w-3 text-primary" />
+                        <span className="text-xs font-medium">Similarity</span>
                       </div>
                       <div className="text-xl font-bold">
-                        {jaguar_name || jaguar_id}
+                        {(similarity * 100).toFixed(1)}%
                       </div>
-                      {jaguar_id && jaguar_name && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          ID: {jaguar_id}
-                        </div>
-                      )}
                     </div>
                   )}
-                  <div
-                    className={cn(
-                      "bg-secondary/50 p-4 rounded-xl",
-                      !match && "col-span-2",
-                    )}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <TrendingUp className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium">
-                        {match ? "Re-ID Similarity" : "Species Confidence"}
-                      </span>
+                  <div className={cn("bg-secondary/50 p-3 rounded-lg", !match && "col-span-2")}>
+                    <div className="flex items-center gap-1 mb-1">
+                      <TrendingUp className="h-3 w-3 text-primary" />
+                      <span className="text-xs font-medium">Confidence</span>
                     </div>
-                    <div className="text-2xl font-bold">
-                      {match ? `${(similarity * 100).toFixed(1)}%` : `${percentage}%`}
-                    </div>
+                    <div className="text-xl font-bold">{percentage}%</div>
                   </div>
                   {match && (
-                    <div className="bg-secondary/50 p-4 rounded-xl">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Award className="h-4 w-4 text-primary" />
-                        <span className="text-sm font-medium">Confidence</span>
+                    <div className="bg-secondary/50 p-3 rounded-lg">
+                      <div className="flex items-center gap-1 mb-1">
+                        <User className="h-3 w-3 text-primary" />
+                        <span className="text-xs font-medium">ID</span>
                       </div>
-                      <div className="text-2xl font-bold">{percentage}%</div>
+                      <div className="text-sm font-bold truncate" title={jaguar_name || jaguar_id}>
+                        {jaguar_name || jaguar_id}
+                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* Threshold Info */}
-                {match ? (
-                  <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
+                {/* Threshold Info - Compact */}
+                <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-lg">
+                  {match ? (
                     <p>
-                      <strong>Re-ID Similarity:</strong> how closely the spotted pattern
-                      of this jaguar matches <strong>{jaguar_name || jaguar_id}</strong> in the database.
-                      Threshold: 70% minimum for a confident match.
+                      Similarity {Math.round(similarity * 100)}% above 70% threshold = confident match with <strong>{jaguar_name || jaguar_id}</strong>
                     </p>
-                  </div>
-                ) : (
-                  <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
+                  ) : (
                     <p>
-                      <strong>Species Confidence:</strong> the AI is {percentage}% confident
-                      this is a jaguar (species classification). This individual was
-                      <strong> not found</strong> in the database — please give them a name below.
+                      {percentage}% species confidence • Not found in database
                     </p>
-                  </div>
-                )}
+                  )}
+                </div>
               </motion.div>
             </div>
           </div>
