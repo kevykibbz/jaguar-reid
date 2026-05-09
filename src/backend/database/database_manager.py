@@ -322,8 +322,11 @@ class JaguarDatabase:
             SELECT 
                 i.id, i.image_url, i.local_path, i.storage_type,
                 i.file_name, i.file_size, i.image_width, i.image_height,
-                i.format, i.created_at
+                i.format, i.created_at,
+                im.latitude, im.longitude, im.location_name,
+                im.camera_trap_id, im.photographer
             FROM images i
+            LEFT JOIN image_metadata im ON i.id = im.image_id
             WHERE i.jaguar_id = ?
             ORDER BY i.created_at DESC
         """, (jaguar_id,))
@@ -336,8 +339,92 @@ class JaguarDatabase:
             'last_seen': jaguar['last_seen'],
             'times_seen': jaguar['times_seen'],
             'created_at': jaguar['created_at'],
-            'images': [{'url': img['image_url'], 'path': img['local_path'], 'storage': img['storage_type']} for img in images]
+            'images': [
+                {
+                    'url': img['image_url'],
+                    'path': img['local_path'],
+                    'storage': img['storage_type'],
+                    'metadata': {
+                        'latitude': img['latitude'],
+                        'longitude': img['longitude'],
+                        'location_name': img['location_name'],
+                        'camera_trap_id': img['camera_trap_id'],
+                        'photographer': img['photographer']
+                    }
+                }
+                for img in images
+            ]
         }
+    
+    def link_image_to_jaguar(
+        self,
+        jaguar_id: str,
+        image_url: Optional[str] = None,
+        local_path: Optional[str] = None,
+        similarity_score: float = 0.0,
+        image_metadata: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """
+        Link an image to an existing jaguar.
+        """
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT id FROM jaguars WHERE id = ?", (jaguar_id,))
+            if cursor.fetchone() is None:
+                logger.error(f"Jaguar {jaguar_id} not found")
+                return False
+
+            storage_type = 'azure' if image_url else 'local'
+            cursor.execute("""
+                INSERT INTO images (
+                    jaguar_id, image_url, local_path, storage_type,
+                    file_name, file_size, image_width, image_height, format
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                jaguar_id,
+                image_url,
+                local_path,
+                storage_type,
+                image_metadata.get('file_name') if image_metadata else None,
+                image_metadata.get('file_size') if image_metadata else None,
+                image_metadata.get('width') if image_metadata else None,
+                image_metadata.get('height') if image_metadata else None,
+                image_metadata.get('format') if image_metadata else None
+            ))
+            image_id = cursor.lastrowid
+
+            if image_metadata and (image_metadata.get('latitude') is not None or image_metadata.get('location_name')):
+                cursor.execute("""
+                    INSERT INTO image_metadata (
+                        image_id, latitude, longitude, location_name,
+                        camera_trap_id, photographer, notes, tags
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    image_id,
+                    image_metadata.get('latitude'),
+                    image_metadata.get('longitude'),
+                    image_metadata.get('location_name'),
+                    image_metadata.get('camera_trap_id'),
+                    image_metadata.get('photographer'),
+                    image_metadata.get('notes'),
+                    image_metadata.get('tags')
+                ))
+
+            cursor.execute("""
+                INSERT INTO sightings (jaguar_id, similarity_score)
+                VALUES (?, ?)
+            """, (jaguar_id, similarity_score))
+            cursor.execute("""
+                UPDATE jaguars
+                SET last_seen = ?, times_seen = times_seen + 1
+                WHERE id = ?
+            """, (datetime.now(), jaguar_id))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to link image to jaguar: {e}")
+            self.conn.rollback()
+            return False
     
     def list_jaguars(self) -> List[Dict]:
         """List all registered jaguars with their images."""
@@ -346,7 +433,8 @@ class JaguarDatabase:
             SELECT 
                 j.id, j.name, j.first_seen, j.last_seen, j.times_seen,
                 i.image_url, i.local_path, i.storage_type, i.file_name,
-                im.location_name, im.camera_trap_id, im.photographer
+                im.latitude, im.longitude, im.location_name,
+                im.camera_trap_id, im.photographer
             FROM jaguars j
             LEFT JOIN images i ON j.id = i.jaguar_id
             LEFT JOIN image_metadata im ON i.id = im.image_id
@@ -365,6 +453,8 @@ class JaguarDatabase:
                     'times_seen': row['times_seen'],
                     'image_url': None,
                     'file_name': None,
+                    'latitude': None,
+                    'longitude': None,
                     'location_name': None,
                     'camera_trap_id': None,
                     'photographer': None,
@@ -385,6 +475,10 @@ class JaguarDatabase:
                 if jaguars[jag_id]['file_name'] is None and row['file_name']:
                     jaguars[jag_id]['file_name'] = row['file_name']
                 # Set metadata fields from first image that has them
+                if jaguars[jag_id]['latitude'] is None and row['latitude'] is not None:
+                    jaguars[jag_id]['latitude'] = row['latitude']
+                if jaguars[jag_id]['longitude'] is None and row['longitude'] is not None:
+                    jaguars[jag_id]['longitude'] = row['longitude']
                 if jaguars[jag_id]['location_name'] is None and row['location_name']:
                     jaguars[jag_id]['location_name'] = row['location_name']
                 if jaguars[jag_id]['camera_trap_id'] is None and row['camera_trap_id']:

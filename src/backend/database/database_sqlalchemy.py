@@ -47,7 +47,8 @@ class JaguarDatabaseORM:
         local_path: Optional[str] = None,
         storage_type: str = 'local',
         file_info: Optional[Dict] = None,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
+        image_metadata: Optional[Dict] = None
     ) -> bool:
         """Register a new jaguar with embedding and first image."""
         session = self.get_session()
@@ -74,26 +75,26 @@ class JaguarDatabaseORM:
                 image_url=image_url,
                 local_path=local_path,
                 storage_type=storage_type,
-                file_name=file_info.get('file_name') if file_info else None,
-                file_size=file_info.get('file_size') if file_info else None,
-                image_width=file_info.get('width') if file_info else None,
-                image_height=file_info.get('height') if file_info else None,
-                format=file_info.get('format') if file_info else None
+                file_name=(file_info or image_metadata or {}).get('file_name'),
+                file_size=(file_info or image_metadata or {}).get('file_size'),
+                image_width=(file_info or image_metadata or {}).get('width'),
+                image_height=(file_info or image_metadata or {}).get('height'),
+                format=(file_info or image_metadata or {}).get('format')
             )
             session.add(image)
             session.flush()  # Get image.id
             
             # Create metadata if provided
-            if metadata:
+            if image_metadata:
                 img_metadata = ImageMetadata(
                     image_id=image.id,
-                    latitude=metadata.get('gps', {}).get('latitude'),
-                    longitude=metadata.get('gps', {}).get('longitude'),
-                    location_name=metadata.get('location_name'),
-                    camera_trap_id=metadata.get('camera_trap_id'),
-                    photographer=metadata.get('photographer'),
-                    notes=metadata.get('notes'),
-                    tags=json.dumps(metadata.get('tags', []))
+                    latitude=image_metadata.get('latitude'),
+                    longitude=image_metadata.get('longitude'),
+                    location_name=image_metadata.get('location_name'),
+                    camera_trap_id=image_metadata.get('camera_trap_id'),
+                    photographer=image_metadata.get('photographer'),
+                    notes=image_metadata.get('notes'),
+                    tags=json.dumps(image_metadata.get('tags', []))
                 )
                 session.add(img_metadata)
             
@@ -252,7 +253,8 @@ class JaguarDatabaseORM:
         jaguar_id: str,
         image_url: Optional[str] = None,
         local_path: Optional[str] = None,
-        similarity_score: float = 0.0
+        similarity_score: float = 0.0,
+        image_metadata: Optional[Dict] = None
     ) -> bool:
         """Link an image to an existing jaguar (manual matching).
         
@@ -281,6 +283,21 @@ class JaguarDatabaseORM:
                 storage_type='azure' if image_url else 'local'
             )
             session.add(new_image)
+            session.flush()
+            
+            # Create metadata if provided
+            if image_metadata:
+                img_metadata = ImageMetadata(
+                    image_id=new_image.id,
+                    latitude=image_metadata.get('latitude'),
+                    longitude=image_metadata.get('longitude'),
+                    location_name=image_metadata.get('location_name'),
+                    camera_trap_id=image_metadata.get('camera_trap_id'),
+                    photographer=image_metadata.get('photographer'),
+                    notes=image_metadata.get('notes'),
+                    tags=json.dumps(image_metadata.get('tags', []))
+                )
+                session.add(img_metadata)
             
             # Record sighting
             sighting = Sighting(
@@ -332,10 +349,22 @@ class JaguarDatabaseORM:
                     'created_at': jaguar.created_at.isoformat() + 'Z' if jaguar.created_at else None,
                     'image_url': first_image.image_url if first_image else None,
                     'file_name': first_image.file_name if first_image else None,
+                    'latitude': first_image.image_metadata.latitude if first_image and first_image.image_metadata else None,
+                    'longitude': first_image.image_metadata.longitude if first_image and first_image.image_metadata else None,
+                    'location_name': first_image.image_metadata.location_name if first_image and first_image.image_metadata else None,
+                    'camera_trap_id': first_image.image_metadata.camera_trap_id if first_image and first_image.image_metadata else None,
+                    'photographer': first_image.image_metadata.photographer if first_image and first_image.image_metadata else None,
                     'images': [{
                         'url': img.image_url,
                         'path': img.local_path,
-                        'storage': img.storage_type
+                        'storage': img.storage_type,
+                        'metadata': {
+                            'latitude': img.image_metadata.latitude if img.image_metadata else None,
+                            'longitude': img.image_metadata.longitude if img.image_metadata else None,
+                            'location_name': img.image_metadata.location_name if img.image_metadata else None,
+                            'camera_trap_id': img.image_metadata.camera_trap_id if img.image_metadata else None,
+                            'photographer': img.image_metadata.photographer if img.image_metadata else None,
+                        }
                     } for img in all_images]
                 })
             
@@ -365,10 +394,22 @@ class JaguarDatabaseORM:
                 'last_seen': jaguar.last_seen.isoformat() + 'Z' if jaguar.last_seen else None,
                 'times_seen': jaguar.times_seen,
                 'created_at': jaguar.created_at.isoformat() + 'Z' if jaguar.created_at else None,
+                'latitude': images[0].image_metadata.latitude if images and images[0].image_metadata else None,
+                'longitude': images[0].image_metadata.longitude if images and images[0].image_metadata else None,
+                'location_name': images[0].image_metadata.location_name if images and images[0].image_metadata else None,
+                'camera_trap_id': images[0].image_metadata.camera_trap_id if images and images[0].image_metadata else None,
+                'photographer': images[0].image_metadata.photographer if images and images[0].image_metadata else None,
                 'images': [{
                     'url': img.image_url,
                     'path': img.local_path,
-                    'storage': img.storage_type
+                    'storage': img.storage_type,
+                    'metadata': {
+                        'latitude': img.image_metadata.latitude if img.image_metadata else None,
+                        'longitude': img.image_metadata.longitude if img.image_metadata else None,
+                        'location_name': img.image_metadata.location_name if img.image_metadata else None,
+                        'camera_trap_id': img.image_metadata.camera_trap_id if img.image_metadata else None,
+                        'photographer': img.image_metadata.photographer if img.image_metadata else None,
+                    }
                 } for img in images]
             }
         finally:

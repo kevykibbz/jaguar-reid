@@ -95,6 +95,8 @@ const ImageDetailPage = () => {
         first_seen: data.first_seen,
         last_seen: data.last_seen,
         metadata: {
+          latitude: data.latitude ?? undefined,
+          longitude: data.longitude ?? undefined,
           location_name: data.location_name ?? undefined,
           camera_trap_id: data.camera_trap_id ?? undefined,
           photographer: data.photographer ?? undefined,
@@ -508,7 +510,9 @@ const ImageDetailPage = () => {
             </motion.div>
 
             {/* Field Data */}
-            {(imageDetail.metadata?.location_name ||
+            {(imageDetail.metadata?.latitude !== undefined ||
+              imageDetail.metadata?.longitude !== undefined ||
+              imageDetail.metadata?.location_name ||
               imageDetail.metadata?.camera_trap_id ||
               imageDetail.metadata?.photographer) && (
               <motion.div
@@ -525,7 +529,21 @@ const ImageDetailPage = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-                      {imageDetail.metadata?.location_name && (
+                      {imageDetail.metadata?.location_name && imageDetail.metadata?.latitude !== undefined && imageDetail.metadata?.longitude !== undefined && (
+                        <div className="flex items-start gap-2">
+                          <MapPin className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-xs text-muted-foreground">Location</p>
+                            <button
+                              onClick={() => window.open(`https://www.google.com/maps?q=${imageDetail.metadata.latitude},${imageDetail.metadata.longitude}`, '_blank')}
+                              className="font-medium text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
+                            >
+                              {imageDetail.metadata.location_name}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {imageDetail.metadata?.location_name && (imageDetail.metadata?.latitude === undefined || imageDetail.metadata?.longitude === undefined) && (
                         <div className="flex items-start gap-2">
                           <MapPin className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
                           <div>

@@ -53,17 +53,20 @@ dist/
 dist-ssr/
 *.local
 
-# Environment variables
+# Environment variables (NEVER COMMIT!)
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+backend_env.json
+backend_secrets.json
 
 # Azure credentials (NEVER COMMIT!)
 .azure-credentials
 azure-credentials.txt
 *.credentials
+.azure/
 
 # IDE / Editor
 .vscode/*
@@ -148,6 +151,24 @@ out/
 .tern-port
 .yarn/cache
 .yarn/unplugged
+
+# Development tools and executables
+exiftool/
+*.exe
+*.dll
+
+# One-time scripts (remove after use)
+add_gps_*.py
+check_azure_gps.py
+inspect_production_db.py
+configure-azure-storage.ps1
+setup-azure-storage.ps1
+upload_models_to_azure.ps1
+deploy-frontend-only.ps1
+deploy-to-azure.ps1
+start-backend-dev.ps1
+start-production.ps1
+start.ps1
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
@@ -162,3 +183,4 @@ src/backend/sync_image_urls.py
 src\backend\notebook
 
 inspect_production_db.py
+add_gps_to_image.py

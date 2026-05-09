@@ -453,7 +453,21 @@ const JaguarGalleryPage = () => {
                         <Calendar className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
                         <span className="truncate">First {new Date(jaguar.first_seen).toLocaleDateString()}</span>
                       </div>
-                      {jaguar.location_name && (
+                      {jaguar.location_name && jaguar.latitude !== null && jaguar.longitude !== null && (
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5 text-orange-500 flex-shrink-0" />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(`https://www.google.com/maps?q=${jaguar.latitude},${jaguar.longitude}`, '_blank');
+                            }}
+                            className="truncate text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
+                          >
+                            {jaguar.location_name}
+                          </button>
+                        </div>
+                      )}
+                      {jaguar.location_name && (jaguar.latitude === null || jaguar.longitude === null) && (
                         <div className="flex items-center gap-1.5">
                           <MapPin className="h-3.5 w-3.5 text-orange-500 flex-shrink-0" />
                           <span className="truncate">{jaguar.location_name}</span>

@@ -62,6 +62,8 @@ export interface JaguarImage {
   times_seen: number;
   image_url?: string | null;
   file_name?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   location_name?: string | null;
   camera_trap_id?: string | null;
   photographer?: string | null;

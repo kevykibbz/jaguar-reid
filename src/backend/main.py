@@ -25,6 +25,7 @@ from animal_filter import AnimalFilter
 from preprocessing import classify_image, classify_video
 from database.database_manager import get_database
 from services.azure_storage import AzureStorageManager
+from utils import extract_image_metadata
 
 
 # Request model for JSON input
@@ -868,6 +869,15 @@ async def register_jaguar(
         else:
             # It's an image, use directly
             image_bytes = file_bytes
+
+        image_metadata = {}
+        try:
+            image_metadata = extract_image_metadata(
+                image_bytes,
+                filename=(file.filename if file is not None and getattr(file, 'filename', None) else 'image.jpg')
+            )
+        except Exception as e:
+            print(f"[Registration] Warning: failed to extract image metadata: {e}")
         
         # Step 1: Validate it's a jaguar (without auto-registration)
         result = classify_image(image_bytes, animal_filter, stage1_model, stage2_model, stage3_model=None, db=None, azure_storage=None)
@@ -946,7 +956,8 @@ async def register_jaguar(
             name=jaguar_name,
             embedding=embedding.tolist(),
             image_url=image_url,
-            local_path=local_path
+            local_path=local_path,
+            image_metadata=image_metadata
         )
         
         if not success:
@@ -959,7 +970,8 @@ async def register_jaguar(
             "message": f"Successfully registered jaguar: {jaguar_name}",
             "jaguar_id": jaguar_id,
             "jaguar_name": jaguar_name,
-            "image_url": image_url
+            "image_url": image_url,
+            "image_metadata": image_metadata
         }
         
     except HTTPException:
@@ -1025,6 +1037,15 @@ async def link_to_existing_jaguar(
         raise HTTPException(status_code=400, detail="No file data received")
     
     try:
+        image_metadata = {}
+        try:
+            image_metadata = extract_image_metadata(
+                file_bytes,
+                filename=(file.filename if file is not None and getattr(file, 'filename', None) else 'image.jpg')
+            )
+        except Exception as e:
+            print(f"[Link] Warning: failed to extract image metadata: {e}")
+
         # Validate it's a jaguar
         result = classify_image(file_bytes, animal_filter, stage1_model, stage2_model, stage3_model=None, db=None, azure_storage=None)
         
@@ -1093,7 +1114,8 @@ async def link_to_existing_jaguar(
             jaguar_id=jaguar_id,
             image_url=image_url_stored,
             local_path=local_path,
-            similarity_score=similarity_score
+            similarity_score=similarity_score,
+            image_metadata=image_metadata
         )
         
         if not success:
@@ -1106,7 +1128,8 @@ async def link_to_existing_jaguar(
             "message": f"Successfully linked image to jaguar: {jaguar_detail['name']}",
             "jaguar_id": jaguar_id,
             "jaguar_name": jaguar_detail['name'],
-            "image_url": image_url_stored
+            "image_url": image_url_stored,
+            "image_metadata": image_metadata
         }
         
     except HTTPException:
