@@ -173,6 +173,30 @@ const JaguarGalleryPage = () => {
     return null;
   };
 
+  const getJaguarLocation = (jaguar: JaguarImage) => {
+    if (jaguar.latitude != null && jaguar.longitude != null) {
+      return {
+        location_name: jaguar.location_name ?? null,
+        latitude: jaguar.latitude,
+        longitude: jaguar.longitude,
+      };
+    }
+
+    const fallbackImage = jaguar.images?.find(
+      (img) => img.metadata?.latitude != null || img.metadata?.longitude != null,
+    );
+
+    if (fallbackImage?.metadata && (fallbackImage.metadata.latitude != null || fallbackImage.metadata.longitude != null)) {
+      return {
+        location_name: fallbackImage.metadata.location_name ?? null,
+        latitude: fallbackImage.metadata.latitude ?? null,
+        longitude: fallbackImage.metadata.longitude ?? null,
+      };
+    }
+
+    return null;
+  };
+
   const getConfidenceLevel = (timesSeen: number) => {
     // Calculate confidence based on sightings (higher = more confident identification)
     if (timesSeen >= 5)
@@ -453,26 +477,27 @@ const JaguarGalleryPage = () => {
                         <Calendar className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
                         <span className="truncate">First {new Date(jaguar.first_seen).toLocaleDateString()}</span>
                       </div>
-                      {jaguar.location_name && jaguar.latitude !== null && jaguar.longitude !== null && (
-                        <div className="flex items-center gap-1.5">
-                          <MapPin className="h-3.5 w-3.5 text-orange-500 flex-shrink-0" />
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              window.open(`https://www.google.com/maps?q=${jaguar.latitude},${jaguar.longitude}`, '_blank');
-                            }}
-                            className="truncate text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
-                          >
-                            {jaguar.location_name}
-                          </button>
-                        </div>
-                      )}
-                      {jaguar.location_name && (jaguar.latitude === null || jaguar.longitude === null) && (
-                        <div className="flex items-center gap-1.5">
-                          <MapPin className="h-3.5 w-3.5 text-orange-500 flex-shrink-0" />
-                          <span className="truncate">{jaguar.location_name}</span>
-                        </div>
-                      )}
+                      {(() => {
+                        const location = getJaguarLocation(jaguar);
+                        if (!location || (location.latitude == null && location.longitude == null)) return null;
+                        const label = location.location_name
+                          ? location.location_name
+                          : `${location.latitude?.toFixed(4)}°, ${location.longitude?.toFixed(4)}°`;
+                        return (
+                          <div className="flex items-center gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 text-orange-500 flex-shrink-0" />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(`https://www.google.com/maps?q=${location.latitude},${location.longitude}`, '_blank');
+                              }}
+                              className="truncate text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
+                            >
+                              {label}
+                            </button>
+                          </div>
+                        );
+                      })()}
                       {jaguar.camera_trap_id && (
                         <div className="flex items-center gap-1.5 col-span-2">
                           <Camera className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />

@@ -14,6 +14,7 @@ import {
   MapPin,
   User,
   Tag,
+  ExternalLink,
 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -85,6 +86,10 @@ const ImageDetailPage = () => {
         imageUrl = data.images[0].url || data.images[0].path || "";
       }
 
+      const fallbackMetadata = data.images?.find(
+        (img) => img.metadata?.latitude !== undefined || img.metadata?.longitude !== undefined || img.metadata?.location_name,
+      )?.metadata;
+
       setImageDetail({
         id: data.id + "-image-0",
         jaguar_id: data.id,
@@ -95,11 +100,11 @@ const ImageDetailPage = () => {
         first_seen: data.first_seen,
         last_seen: data.last_seen,
         metadata: {
-          latitude: data.latitude ?? undefined,
-          longitude: data.longitude ?? undefined,
-          location_name: data.location_name ?? undefined,
-          camera_trap_id: data.camera_trap_id ?? undefined,
-          photographer: data.photographer ?? undefined,
+          latitude: data.latitude ?? fallbackMetadata?.latitude ?? undefined,
+          longitude: data.longitude ?? fallbackMetadata?.longitude ?? undefined,
+          location_name: data.location_name ?? fallbackMetadata?.location_name ?? undefined,
+          camera_trap_id: data.camera_trap_id ?? fallbackMetadata?.camera_trap_id ?? undefined,
+          photographer: data.photographer ?? fallbackMetadata?.photographer ?? undefined,
         },
       });
 
@@ -529,26 +534,23 @@ const ImageDetailPage = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-                      {imageDetail.metadata?.location_name && imageDetail.metadata?.latitude !== undefined && imageDetail.metadata?.longitude !== undefined && (
+                      {(imageDetail.metadata?.location_name || (imageDetail.metadata?.latitude != null && imageDetail.metadata?.longitude != null)) && (
                         <div className="flex items-start gap-2">
                           <MapPin className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
                           <div>
                             <p className="text-xs text-muted-foreground">Location</p>
-                            <button
-                              onClick={() => window.open(`https://www.google.com/maps?q=${imageDetail.metadata.latitude},${imageDetail.metadata.longitude}`, '_blank')}
-                              className="font-medium text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
-                            >
-                              {imageDetail.metadata.location_name}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      {imageDetail.metadata?.location_name && (imageDetail.metadata?.latitude === undefined || imageDetail.metadata?.longitude === undefined) && (
-                        <div className="flex items-start gap-2">
-                          <MapPin className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
-                          <div>
-                            <p className="text-xs text-muted-foreground">Location</p>
-                            <p className="font-medium">{imageDetail.metadata.location_name}</p>
+                            {imageDetail.metadata?.latitude != null && imageDetail.metadata?.longitude != null ? (
+                              <button
+                                onClick={() => {
+                                  window.open(`https://www.google.com/maps?q=${imageDetail.metadata!.latitude},${imageDetail.metadata!.longitude}`, '_blank');
+                                }}
+                                className="font-medium text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
+                              >
+                                {imageDetail.metadata.location_name || `${imageDetail.metadata.latitude?.toFixed(4)}°, ${imageDetail.metadata.longitude?.toFixed(4)}°`}
+                              </button>
+                            ) : (
+                              <p className="font-medium">{imageDetail.metadata?.location_name}</p>
+                            )}
                           </div>
                         </div>
                       )}
@@ -570,6 +572,59 @@ const ImageDetailPage = () => {
                           </div>
                         </div>
                       )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {/* Location Map */}
+            {imageDetail.metadata?.latitude != null && imageDetail.metadata?.longitude != null && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.38 }}
+              >
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-orange-500" />
+                        Sighting Location
+                      </CardTitle>
+                      <button
+                        onClick={() =>
+                          window.open(
+                            `https://www.google.com/maps?q=${imageDetail.metadata!.latitude},${imageDetail.metadata!.longitude}`,
+                            "_blank",
+                          )
+                        }
+                        className="flex items-center gap-1.5 text-xs text-orange-600 hover:text-orange-700 hover:underline"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Open in Maps
+                      </button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0 pb-4 px-4 space-y-3">
+                    <div className="rounded-lg overflow-hidden border border-border h-64">
+                      <iframe
+                        title="Sighting location map"
+                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${imageDetail.metadata.longitude - 0.05},${imageDetail.metadata.latitude - 0.05},${imageDetail.metadata.longitude + 0.05},${imageDetail.metadata.latitude + 0.05}&layer=mapnik&marker=${imageDetail.metadata.latitude},${imageDetail.metadata.longitude}`}
+                        className="w-full h-full"
+                        loading="lazy"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>
+                        {imageDetail.metadata.location_name
+                          ? imageDetail.metadata.location_name
+                          : `${imageDetail.metadata.latitude.toFixed(6)}°, ${imageDetail.metadata.longitude.toFixed(6)}°`}
+                      </span>
+                      <span className="font-mono">
+                        {imageDetail.metadata.latitude.toFixed(4)}°{" "}
+                        {imageDetail.metadata.longitude.toFixed(4)}°
+                      </span>
                     </div>
                   </CardContent>
                 </Card>

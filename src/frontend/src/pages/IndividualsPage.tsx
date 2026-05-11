@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ImageOff,
+  MapPin,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -211,6 +212,16 @@ const IndividualsPage = () => {
                           {jaguar.times_seen ?? 0} detection{(jaguar.times_seen ?? 0) !== 1 ? "s" : ""}
                         </span>
                       </div>
+                      {(jaguar.location_name || (jaguar.latitude !== null && jaguar.longitude !== null)) && (
+                        <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                          <MapPin className="h-3 w-3 text-orange-500" />
+                          <span>
+                            {jaguar.location_name
+                              ? jaguar.location_name
+                              : `${jaguar.latitude?.toFixed(4)}°, ${jaguar.longitude?.toFixed(4)}°`}
+                          </span>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </motion.div>

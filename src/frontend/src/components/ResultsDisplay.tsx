@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { CheckCircle2, TrendingUp, Award, User, Database } from "lucide-react";
+import { CheckCircle2, TrendingUp, Award, User, Database, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -17,6 +17,11 @@ interface MatchResult {
   similarity: number;
   species?: string;
   all_scores?: Record<string, number>;
+  gps?: {
+    latitude?: number | null;
+    longitude?: number | null;
+    has_gps?: boolean;
+  };
 }
 
 interface ResultsDisplayProps {
@@ -30,7 +35,7 @@ const ResultsDisplay = ({
   open,
   onClose,
 }: ResultsDisplayProps) => {
-  const { match, jaguar_id, jaguar_name, confidence, similarity, species, all_scores } = matchResult;
+  const { match, jaguar_id, jaguar_name, confidence, similarity, species, all_scores, gps } = matchResult;
   const percentage = Math.round(confidence * 100);
 
   const circumference = 2 * Math.PI * 60;
@@ -178,7 +183,37 @@ const ResultsDisplay = ({
                   </div>
                 )}
 
-                {/* Stats - Horizontal */}
+                                {/* GPS Coordinates - if available */}
+                {gps && gps.has_gps && (
+                  <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-2 border-blue-500/30 p-3 rounded-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <MapPin className="h-4 w-4 text-blue-500" />
+                      <h4 className="font-bold text-xs">GPS Location</h4>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground">Latitude:</span>
+                        <span className="font-mono font-medium text-blue-600">{gps.latitude?.toFixed(4)}°</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground">Longitude:</span>
+                        <span className="font-mono font-medium text-blue-600">{gps.longitude?.toFixed(4)}°</span>
+                      </div>
+                      {gps.latitude && gps.longitude && (
+                        <div className="text-xs text-muted-foreground pt-1 mt-1 border-t border-blue-500/20">
+                          <a
+                            href={`https://maps.google.com/?q=${gps.latitude},${gps.longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                          >
+                            View on Google Maps →
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-3 gap-3">
                   {match && (
                     <div className="bg-secondary/50 p-3 rounded-lg">

@@ -506,6 +506,34 @@ async def classify(
                 detail=result.get('error', 'Classification failed')
             )
         
+        # Extract GPS from image if available (only for images, not videos)
+        if not is_video:
+            try:
+                image_metadata = extract_image_metadata(file_bytes, filename=file_name)
+                if image_metadata.get('latitude') is not None and image_metadata.get('longitude') is not None:
+                    print(f"[Detector] ✓ GPS Coordinates Found:")
+                    print(f"[Detector]   Latitude:  {image_metadata['latitude']:.4f}°")
+                    print(f"[Detector]   Longitude: {image_metadata['longitude']:.4f}°")
+                    result['gps'] = {
+                        'latitude': image_metadata.get('latitude'),
+                        'longitude': image_metadata.get('longitude'),
+                        'has_gps': True
+                    }
+                else:
+                    print(f"[Detector] ⚠ No GPS coordinates found in image EXIF")
+                    result['gps'] = {
+                        'latitude': None,
+                        'longitude': None,
+                        'has_gps': False
+                    }
+            except Exception as e:
+                print(f"[Detector] Warning: failed to extract GPS: {e}")
+                result['gps'] = {
+                    'latitude': None,
+                    'longitude': None,
+                    'has_gps': False
+                }
+        
         return result
     
     except HTTPException:
@@ -872,10 +900,24 @@ async def register_jaguar(
 
         image_metadata = {}
         try:
+            from utils.image_metadata import get_location_name
             image_metadata = extract_image_metadata(
                 image_bytes,
                 filename=(file.filename if file is not None and getattr(file, 'filename', None) else 'image.jpg')
             )
+            print(f"[Registration] Extracted metadata: {image_metadata}")
+            if image_metadata.get('latitude') and image_metadata.get('longitude'):
+                print(f"[Registration] ✓ GPS Coordinates Found:")
+                print(f"[Registration]   Latitude:  {image_metadata['latitude']:.4f}°")
+                print(f"[Registration]   Longitude: {image_metadata['longitude']:.4f}°")
+                location_name = await get_location_name(image_metadata['latitude'], image_metadata['longitude'])
+                if location_name:
+                    image_metadata['location_name'] = location_name
+                    print(f"[Registration] ✓ Location resolved: {location_name}")
+                else:
+                    print(f"[Registration] ⚠ Could not resolve location name from coordinates")
+            else:
+                print(f"[Registration] ⚠ No GPS coordinates found in image EXIF")
         except Exception as e:
             print(f"[Registration] Warning: failed to extract image metadata: {e}")
         
@@ -971,7 +1013,12 @@ async def register_jaguar(
             "jaguar_id": jaguar_id,
             "jaguar_name": jaguar_name,
             "image_url": image_url,
-            "image_metadata": image_metadata
+            "image_metadata": image_metadata,
+            "gps": {
+                "latitude": image_metadata.get('latitude'),
+                "longitude": image_metadata.get('longitude'),
+                "has_gps": image_metadata.get('latitude') is not None and image_metadata.get('longitude') is not None
+            }
         }
         
     except HTTPException:
@@ -1039,10 +1086,23 @@ async def link_to_existing_jaguar(
     try:
         image_metadata = {}
         try:
+            from utils.image_metadata import get_location_name
             image_metadata = extract_image_metadata(
                 file_bytes,
                 filename=(file.filename if file is not None and getattr(file, 'filename', None) else 'image.jpg')
             )
+            if image_metadata.get('latitude') and image_metadata.get('longitude'):
+                print(f"[Link] ✓ GPS Coordinates Found:")
+                print(f"[Link]   Latitude:  {image_metadata['latitude']:.4f}°")
+                print(f"[Link]   Longitude: {image_metadata['longitude']:.4f}°")
+                location_name = await get_location_name(image_metadata['latitude'], image_metadata['longitude'])
+                if location_name:
+                    image_metadata['location_name'] = location_name
+                    print(f"[Link] ✓ Location resolved: {location_name}")
+                else:
+                    print(f"[Link] ⚠ Could not resolve location name from coordinates")
+            else:
+                print(f"[Link] ⚠ No GPS coordinates found in image EXIF")
         except Exception as e:
             print(f"[Link] Warning: failed to extract image metadata: {e}")
 
@@ -1129,7 +1189,12 @@ async def link_to_existing_jaguar(
             "jaguar_id": jaguar_id,
             "jaguar_name": jaguar_detail['name'],
             "image_url": image_url_stored,
-            "image_metadata": image_metadata
+            "image_metadata": image_metadata,
+            "gps": {
+                "latitude": image_metadata.get('latitude'),
+                "longitude": image_metadata.get('longitude'),
+                "has_gps": image_metadata.get('latitude') is not None and image_metadata.get('longitude') is not None
+            }
         }
         
     except HTTPException:

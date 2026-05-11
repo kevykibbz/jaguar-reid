@@ -71,6 +71,13 @@ export interface JaguarImage {
     url: string;
     path: string | null;
     storage: string;
+    metadata?: {
+      latitude?: number | null;
+      longitude?: number | null;
+      location_name?: string | null;
+      camera_trap_id?: string | null;
+      photographer?: string | null;
+    };
   }>;
 }
 
@@ -269,6 +276,11 @@ export async function identifyJaguar(
     image_url: string | null;
     has_image: boolean;
   }>;
+  gps?: {
+    latitude?: number | null;
+    longitude?: number | null;
+    has_gps?: boolean;
+  };
 }> {
   const formData = new FormData();
 
@@ -326,6 +338,11 @@ export async function identifyJaguar(
     closest_jaguar_name: data.stage3?.closest_jaguar_name ?? null,
     closest_jaguar_id: data.stage3?.closest_jaguar_id ?? null,
     top_matches: data.stage3?.top_matches ?? [],
+    gps: data.gps || {
+      latitude: null,
+      longitude: null,
+      has_gps: false,
+    },
   };
 }
 
@@ -336,7 +353,18 @@ export async function registerNewJaguar(
   file: File | null,
   name: string,
   imageUrl?: string,
-): Promise<{ success: boolean; message: string; jaguar_id?: string }> {
+): Promise<{
+  success: boolean;
+  message: string;
+  jaguar_id?: string;
+  jaguar_name?: string;
+  image_url?: string;
+  gps?: {
+    latitude?: number | null;
+    longitude?: number | null;
+    has_gps?: boolean;
+  };
+}> {
   const formData = new FormData();
 
   if (file) {
@@ -505,7 +533,7 @@ export async function linkToExistingJaguar(
   file: File | null,
   jaguarId: string,
   imageUrl?: string,
-): Promise<{ success: boolean; message: string; jaguar_id?: string; jaguar_name?: string }> {
+): Promise<{ success: boolean; message: string; jaguar_id?: string; jaguar_name?: string; image_url?: string; gps?: { latitude?: number | null; longitude?: number | null; has_gps?: boolean } }> {
   const formData = new FormData();
 
   if (file) {

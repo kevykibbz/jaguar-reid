@@ -40,6 +40,11 @@ interface MatchResult {
   closest_jaguar_name?: string | null;
   closest_jaguar_id?: string | null;
   top_matches?: TopMatch[];
+  gps?: {
+    latitude?: number | null;
+    longitude?: number | null;
+    has_gps?: boolean;
+  };
 }
 
 const JaguarReIdPage = () => {
@@ -205,6 +210,7 @@ const JaguarReIdPage = () => {
         jaguar_name: newJaguarName.trim(),
         confidence: matchResult?.confidence ?? 1.0,
         similarity: 0,
+        gps: data.gps,
       });
     } catch (error) {
       console.error(error);
@@ -262,6 +268,7 @@ const JaguarReIdPage = () => {
         jaguar_name: jaguarName,
         confidence: matchResult?.confidence ?? 1.0,
         similarity: matchResult?.similarity ?? 0.65, // Use the similarity from identification
+        gps: data.gps,
       });
     } catch (error) {
       console.error(error);
@@ -412,6 +419,19 @@ const JaguarReIdPage = () => {
                     <span className="text-xs text-muted-foreground ml-1">
                       (below the 70% match threshold)
                     </span>
+                  </span>
+                )}
+                {matchResult?.gps?.has_gps && (
+                  <span className="block mt-2 text-sm">
+                    Image GPS coordinates: <strong>{matchResult.gps.latitude?.toFixed(4)}°</strong>, <strong>{matchResult.gps.longitude?.toFixed(4)}°</strong> ·
+                    <a
+                      href={`https://maps.google.com/?q=${matchResult.gps.latitude},${matchResult.gps.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-1 text-emerald-300 hover:underline font-bold"
+                    >
+                      Open in Maps
+                    </a>
                   </span>
                 )}
                 <span className="block mt-2">

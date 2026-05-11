@@ -206,7 +206,15 @@ class JaguarDatabase:
             image_id = cursor.lastrowid
             
             # Insert additional metadata if provided
-            if metadata.get('latitude') or metadata.get('location_name'):
+            if (
+                metadata.get('latitude') is not None or
+                metadata.get('longitude') is not None or
+                metadata.get('location_name') or
+                metadata.get('camera_trap_id') or
+                metadata.get('photographer') or
+                metadata.get('notes') or
+                metadata.get('tags')
+            ):
                 cursor.execute("""
                     INSERT INTO image_metadata (
                         image_id, latitude, longitude, location_name,
@@ -393,7 +401,15 @@ class JaguarDatabase:
             ))
             image_id = cursor.lastrowid
 
-            if image_metadata and (image_metadata.get('latitude') is not None or image_metadata.get('location_name')):
+            if image_metadata and (
+                image_metadata.get('latitude') is not None or
+                image_metadata.get('longitude') is not None or
+                image_metadata.get('location_name') or
+                image_metadata.get('camera_trap_id') or
+                image_metadata.get('photographer') or
+                image_metadata.get('notes') or
+                image_metadata.get('tags')
+            ):
                 cursor.execute("""
                     INSERT INTO image_metadata (
                         image_id, latitude, longitude, location_name,
@@ -466,7 +482,14 @@ class JaguarDatabase:
                 jaguars[jag_id]['images'].append({
                     'url': row['image_url'],
                     'path': row['local_path'],
-                    'storage': row['storage_type']
+                    'storage': row['storage_type'],
+                    'metadata': {
+                        'latitude': row['latitude'],
+                        'longitude': row['longitude'],
+                        'location_name': row['location_name'],
+                        'camera_trap_id': row['camera_trap_id'],
+                        'photographer': row['photographer']
+                    }
                 })
                 
                 # Set top-level fields from first image (for backward compatibility)
