@@ -11,7 +11,7 @@ ultralytics==8.3.63
 segment-anything-py==1.0
 httpx==0.28.1
 azure-storage-blob==12.19.0
-python-dotenv==1.0.0
+python-dotenv==1.2.2
 psycopg2-binary==2.9.11
 sqlalchemy==2.0.36
 icrawler==0.6.6
